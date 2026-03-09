@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Build (Release)
+        run: swift build -c release
+
+      - name: Unit Tests
+        run: swift test --filter SimPilotCoreTests
+
+      - name: Boot Simulator
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes iOS -j | python3 -c "
+          import sys, json
+          runtimes = json.load(sys.stdin)['runtimes']
+          available = [r for r in runtimes if r.get('isAvailable', False)]
+          print(available[-1]['identifier'] if available else '')
+          ")
+          if [ -z "$RUNTIME" ]; then
+            echo "::error::No iOS runtime available"
+            exit 1
+          fi
+          echo "Using runtime: $RUNTIME"
+          UDID=$(xcrun simctl create "SimPilot-CI" "iPhone 16 Pro" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          # Wait for simulator to be fully booted
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Integration Tests
+        run: swift test --filter SimPilotIntegrationTests
+        env:
+          SIMPILOT_TEST_UDID: ${{ env.SIMULATOR_UDID }}
+
+      - name: Shutdown Simulator
+        if: always()
+        run: xcrun simctl shutdown all 2>/dev/null || true
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Lint
+        run: swiftlint lint --strict --reporter github-actions-logging

@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+.DS_Store?
+
+# Swift / SPM
+.build/
+.swiftpm/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+Package.resolved
+
+# SimPilot runtime artifacts
+simpilot-traces/
+*.png
+!Examples/*.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key

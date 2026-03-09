@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "simpilot": {
+      "command": "simpilot",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

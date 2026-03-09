@@ -1,0 +1,41 @@
+# Authentication Flow — SimPilot YAML Flow Example
+#
+# Usage:
+#   simpilot run Examples/auth-flow.yaml
+#   simpilot run Examples/auth-flow.yaml --output ./reports
+#   simpilot run Examples/auth-flow.yaml --dry-run
+
+name: Authentication Flow
+device: iPhone 16 Pro
+app:
+  bundle_id: com.example.myapp
+  path: build/MyApp.app
+
+setup:
+  - permission: camera, granted: true
+  - permission: notifications, granted: true
+
+steps:
+  - screenshot: 01_launch
+
+  - tap: { text: "Sign In with Email" }
+  - screenshot: 02_sign_in_screen
+
+  - type: { field: "emailField", text: "user@test.com" }
+  - type: { field: "passwordField", text: "secure123" }
+  - screenshot: 03_filled_form
+
+  - tap: { accessibility_id: "loginButton" }
+  - wait_for: { text: "Welcome", timeout: 10 }
+  - screenshot: 04_authenticated
+
+  - assert_visible: { text: "Dashboard" }
+  - assert_not_visible: { text: "Sign In" }
+
+  - tap: { text: "Settings" }
+  - swipe: { direction: "up" }
+  - assert_visible: { text: "Account" }
+  - screenshot: 05_settings
+
+teardown:
+  - terminate_app: com.example.myapp

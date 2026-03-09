@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simpilot"
+version = "0.1.0"
+description = "Python SDK for SimPilot — iOS Simulator automation (Playwright for iOS)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "SimPilot Contributors" },
+]
+keywords = ["ios", "simulator", "automation", "testing", "playwright", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourorg/SimPilot"
+Documentation = "https://github.com/yourorg/SimPilot/tree/main/docs"
+Repository = "https://github.com/yourorg/SimPilot"
+Issues = "https://github.com/yourorg/SimPilot/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/simpilot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100

@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building SimPilot v$VERSION"
+
+      - name: Build Universal Binary
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Package binary
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCHIVE="simpilot-${VERSION}-macos-universal.tar.gz"
+          tar -czf "$ARCHIVE" -C .build/apple/Products/Release simpilot
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+          shasum -a 256 "$ARCHIVE" | tee sha256.txt
+          echo "SHA256=$(cut -d ' ' -f 1 sha256.txt)" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ARCHIVE }}
+            sha256.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ env.SHA256 }}"
+          REPO="${{ github.repository }}"
+
+          # Skip Homebrew update if tap token is not configured
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set — skipping Homebrew formula update"
+            exit 0
+          fi
+
+          FORMULA_CONTENT=$(cat <<RUBY
+          class Simpilot < Formula
+            desc "iOS Simulator automation framework — Playwright for iOS"
+            homepage "https://github.com/${REPO}"
+            url "https://github.com/${REPO}/releases/download/v${VERSION}/simpilot-${VERSION}-macos-universal.tar.gz"
+            sha256 "${SHA}"
+            license "MIT"
+
+            depends_on :macos
+
+            def install
+              bin.install "simpilot"
+            end
+
+            test do
+              assert_match "SimPilot", shell_output("#{bin}/simpilot version")
+            end
+          end
+          RUBY
+          )
+
+          # Clone the tap repo, update, and push
+          OWNER="${REPO%%/*}"
+          TAP_REPO="${OWNER}/homebrew-simpilot"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git" /tmp/tap || {
+            echo "::warning::Could not clone tap repo ${TAP_REPO} — skipping"
+            exit 0
+          }
+          mkdir -p /tmp/tap/Formula
+          echo "$FORMULA_CONTENT" > /tmp/tap/Formula/simpilot.rb
+          cd /tmp/tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/simpilot.rb
+          git commit -m "Update simpilot to v${VERSION}" || exit 0
+          git push
