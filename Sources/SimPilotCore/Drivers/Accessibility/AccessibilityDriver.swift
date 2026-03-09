@@ -2,7 +2,7 @@ import ApplicationServices
 import AppKit
 import CoreGraphics
 import Foundation
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 
 /// Reads the iOS Simulator's UI element tree via macOS Accessibility APIs (AXUIElement).
 /// Requires Accessibility permission in System Settings > Privacy & Security > Accessibility.
