@@ -22,7 +22,9 @@ public struct JUnitReporter: Sendable {
         var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <testsuites>
-          <testsuite name="\(escapeXML(suiteName))" tests="\(assertions.count)" failures="\(failures.count)" time="\(String(format: "%.3f", totalDuration))">
+          <testsuite name="\(escapeXML(suiteName))"
+            tests="\(assertions.count)" failures="\(failures.count)"
+            time="\(String(format: "%.3f", totalDuration))">
         """
 
         for event in assertions {

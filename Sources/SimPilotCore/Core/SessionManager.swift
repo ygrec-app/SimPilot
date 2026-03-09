@@ -81,7 +81,7 @@ public actor Session {
     public func waitFor(_ query: ElementQuery, timeout: TimeInterval = 10) async throws {
         let deadline = ContinuousClock.now + .seconds(timeout)
         while ContinuousClock.now < deadline {
-            if let _ = try? await resolveElement(query) {
+            if (try? await resolveElement(query)) != nil {
                 return
             }
             try await Task.sleep(for: .milliseconds(250))
@@ -96,7 +96,7 @@ public actor Session {
     // MARK: - Assertions
 
     public func assertVisible(_ query: ElementQuery) async throws {
-        let _ = try await resolveElement(query)
+        _ = try await resolveElement(query)
         assertionPassCount += 1
     }
 

@@ -24,8 +24,7 @@ public actor SimulatorManager {
         // Find matching device, prefer latest runtime
         guard let device = devices
             .filter({ $0.name == deviceName })
-            .sorted(by: { $0.runtime > $1.runtime })
-            .first
+            .max(by: { $0.runtime < $1.runtime })
         else {
             let available = Set(devices.map(\.name)).sorted()
             throw SimPilotError.simulatorNotFound(

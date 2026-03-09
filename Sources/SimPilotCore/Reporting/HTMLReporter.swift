@@ -132,7 +132,10 @@ public struct HTMLReporter: Sendable {
     private static var css: String {
         """
                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
+                    background: #0d1117; color: #c9d1d9; line-height: 1.5;
+                }
                 .container { max-width: 960px; margin: 0 auto; padding: 24px; }
                 .summary { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
                 .summary h1 { font-size: 20px; font-weight: 600; margin-bottom: 12px; color: #f0f6fc; }
@@ -143,7 +146,10 @@ public struct HTMLReporter: Sendable {
                 .stat.pass { color: #3fb950; }
                 .stat.fail { color: #f85149; background: #3d1d20; }
                 .timeline { display: flex; flex-direction: column; gap: 2px; }
-                .step { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+                .step {
+                    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+                    padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+                }
                 .step-number { font-size: 12px; color: #484f58; font-weight: 600; min-width: 28px; }
                 .step-time { font-size: 11px; color: #484f58; font-family: 'SF Mono', monospace; }
                 .step-type { font-size: 11px; font-weight: 600; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }

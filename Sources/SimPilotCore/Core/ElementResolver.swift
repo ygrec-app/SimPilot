@@ -51,82 +51,85 @@ public actor ElementResolver: ElementResolving {
     private func tryResolve(_ query: ElementQuery) async throws -> ResolvedElement? {
         let tree = try await introspectionDriver.getElementTree()
 
-        // Strategy 1: Accessibility ID (most reliable)
-        if let accessibilityID = query.accessibilityID {
-            if let element = findInTree(tree.root, where: { $0.id == accessibilityID }) {
-                return ResolvedElement(element: element, strategy: .accessibilityID)
-            }
-        }
-
-        // Strategy 2: Label match
-        if let label = query.label {
-            if let element = findInTree(tree.root, where: {
-                $0.label?.localizedCaseInsensitiveContains(label) == true
-            }) {
-                // If elementType is also specified, verify it matches
-                if let requiredType = query.elementType, element.elementType != requiredType {
-                    // Try harder: filter by both type and label
-                    let candidates = filterTree(tree.root, where: {
-                        $0.elementType == requiredType
-                            && $0.label?.localizedCaseInsensitiveContains(label) == true
-                    })
-                    if let match = safeIndex(candidates, query.index ?? 0) {
-                        return ResolvedElement(element: match, strategy: .label)
-                    }
-                } else {
-                    return ResolvedElement(element: element, strategy: .label)
-                }
-            }
-        }
-
-        // Strategy 3: Element type + text combination
-        if let type = query.elementType {
-            let candidates = filterTree(tree.root, where: { $0.elementType == type })
-            if let text = query.text {
-                if let match = candidates.first(where: {
-                    $0.label?.localizedCaseInsensitiveContains(text) == true
-                        || $0.value?.localizedCaseInsensitiveContains(text) == true
-                }) {
-                    return ResolvedElement(element: match, strategy: .typeAndText)
-                }
-            } else if let match = safeIndex(candidates, query.index ?? 0) {
-                return ResolvedElement(element: match, strategy: .typeOnly)
-            }
-        }
-
-        // Strategy 4: Text-only search (no type specified)
-        if let text = query.text, query.elementType == nil, query.accessibilityID == nil, query.label == nil {
-            if let element = findInTree(tree.root, where: {
-                $0.label?.localizedCaseInsensitiveContains(text) == true
-                    || $0.value?.localizedCaseInsensitiveContains(text) == true
-            }) {
-                return ResolvedElement(element: element, strategy: .label)
-            }
-        }
-
-        // Strategy 5: Vision OCR fallback
-        if config.enableOCRFallback, let visionDriver {
-            if let text = query.text ?? query.label {
-                let screenshotData = try await introspectionDriver.screenshot()
-                // Default screen size; real implementation would query device info
-                let imageSize = CGSize(width: 393, height: 852)
-                if let point = try await visionDriver.findText(text, in: screenshotData, imageSize: imageSize) {
-                    let ocrElement = Element(
-                        id: nil,
-                        label: text,
-                        value: nil,
-                        elementType: .other,
-                        frame: CGRect(origin: point, size: .zero),
-                        traits: [],
-                        isEnabled: true,
-                        children: []
-                    )
-                    return ResolvedElement(element: ocrElement, strategy: .visionOCR)
-                }
-            }
-        }
+        if let result = resolveByID(query, root: tree.root) { return result }
+        if let result = resolveByLabel(query, root: tree.root) { return result }
+        if let result = resolveByType(query, root: tree.root) { return result }
+        if let result = resolveByTextOnly(query, root: tree.root) { return result }
+        if let result = try await resolveByOCR(query) { return result }
 
         return nil
+    }
+
+    private func resolveByID(_ query: ElementQuery, root: Element) -> ResolvedElement? {
+        guard let accessibilityID = query.accessibilityID,
+              let element = findInTree(root, where: { $0.id == accessibilityID }) else {
+            return nil
+        }
+        return ResolvedElement(element: element, strategy: .accessibilityID)
+    }
+
+    private func resolveByLabel(_ query: ElementQuery, root: Element) -> ResolvedElement? {
+        guard let label = query.label,
+              let element = findInTree(root, where: {
+                  $0.label?.localizedCaseInsensitiveContains(label) == true
+              }) else {
+            return nil
+        }
+        if let requiredType = query.elementType, element.elementType != requiredType {
+            let candidates = filterTree(root, where: {
+                $0.elementType == requiredType
+                    && $0.label?.localizedCaseInsensitiveContains(label) == true
+            })
+            guard let match = safeIndex(candidates, query.index ?? 0) else { return nil }
+            return ResolvedElement(element: match, strategy: .label)
+        }
+        return ResolvedElement(element: element, strategy: .label)
+    }
+
+    private func resolveByType(_ query: ElementQuery, root: Element) -> ResolvedElement? {
+        guard let type = query.elementType else { return nil }
+        let candidates = filterTree(root, where: { $0.elementType == type })
+        if let text = query.text {
+            guard let match = candidates.first(where: {
+                $0.label?.localizedCaseInsensitiveContains(text) == true
+                    || $0.value?.localizedCaseInsensitiveContains(text) == true
+            }) else { return nil }
+            return ResolvedElement(element: match, strategy: .typeAndText)
+        }
+        guard let match = safeIndex(candidates, query.index ?? 0) else { return nil }
+        return ResolvedElement(element: match, strategy: .typeOnly)
+    }
+
+    private func resolveByTextOnly(_ query: ElementQuery, root: Element) -> ResolvedElement? {
+        guard let text = query.text,
+              query.elementType == nil, query.accessibilityID == nil, query.label == nil,
+              let element = findInTree(root, where: {
+                  $0.label?.localizedCaseInsensitiveContains(text) == true
+                      || $0.value?.localizedCaseInsensitiveContains(text) == true
+              }) else {
+            return nil
+        }
+        return ResolvedElement(element: element, strategy: .label)
+    }
+
+    private func resolveByOCR(_ query: ElementQuery) async throws -> ResolvedElement? {
+        guard config.enableOCRFallback, let visionDriver,
+              let text = query.text ?? query.label else {
+            return nil
+        }
+        let screenshotData = try await introspectionDriver.screenshot()
+        let imageSize = CGSize(width: 393, height: 852)
+        guard let point = try await visionDriver.findText(
+            text, in: screenshotData, imageSize: imageSize
+        ) else {
+            return nil
+        }
+        let ocrElement = Element(
+            id: nil, label: text, value: nil, elementType: .other,
+            frame: CGRect(origin: point, size: .zero),
+            traits: [], isEnabled: true, children: []
+        )
+        return ResolvedElement(element: ocrElement, strategy: .visionOCR)
     }
 
     // MARK: - Tree Traversal

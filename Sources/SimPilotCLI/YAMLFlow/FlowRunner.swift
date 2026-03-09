@@ -103,83 +103,102 @@ struct FlowRunner {
     private func executeStep(_ step: FlowStep, index: Int, phase: String) async throws -> [String] {
         switch step {
         case .tap(let config):
-            let query = buildQuery(
-                accessibilityID: config.accessibilityID,
-                label: config.label,
-                text: config.text,
-                timeout: config.timeout
-            )
-            try await session.tap(query)
-            return []
-
+            return try await executeTap(config)
         case .type(let config):
-            let query: ElementQuery
-            if let field = config.field {
-                query = .byID(field)
-            } else if let id = config.accessibilityID {
-                query = .byID(id)
-            } else {
-                // Type into currently focused field
-                try await session.type(into: .byText(""), text: config.text)
-                return []
-            }
-            try await session.type(into: query, text: config.text)
-            return []
-
+            return try await executeType(config)
         case .swipe(let config):
-            guard let direction = SwipeDirection(rawValue: config.direction) else {
-                throw RunError.invalidDirection(config.direction)
-            }
-            try await session.swipe(direction)
-            return []
-
+            return try await executeSwipe(config)
         case .screenshot(let name):
-            let data = try await session.screenshot(name)
-            if let outputDir {
-                let path = try saveScreenshot(data, name: name, dir: outputDir)
-                return [path]
-            }
-            return []
-
+            return try await executeScreenshot(name)
         case .waitFor(let config):
-            let query = buildQuery(
-                accessibilityID: config.accessibilityID,
-                label: nil,
-                text: config.text,
-                timeout: config.timeout
-            )
-            try await session.waitFor(query, timeout: config.timeout)
-            return []
-
+            return try await executeWait(config)
         case .assertVisible(let config):
-            if let text = config.text {
-                try await session.assertVisible(text: text)
-            } else if let id = config.accessibilityID {
-                try await session.assertVisible(.byID(id))
-            } else if let label = config.label {
-                try await session.assertVisible(.byLabel(label))
-            }
-            return []
-
+            return try await executeAssertVisible(config)
         case .assertNotVisible(let config):
-            if let text = config.text {
-                try await session.assertNotVisible(text: text)
-            }
-            return []
-
+            return try await executeAssertNotVisible(config)
         case .setPermission(let config):
-            guard let permission = AppPermission(rawValue: config.permission) else {
-                throw RunError.invalidPermission(config.permission)
-            }
-            // Permission setting requires the simulator driver — not directly on Session.
-            // For now, print a warning. Full implementation requires PermissionDriver wiring.
-            printWarning("Permission step '\(permission.rawValue)' = \(config.granted) (requires PermissionDriver)")
-            return []
-
-        case .terminateApp(_):
+            return try executeSetPermission(config)
+        case .terminateApp:
             _ = try await session.end()
             return []
         }
+    }
+
+    private func executeTap(_ config: FlowTapConfig) async throws -> [String] {
+        let query = buildQuery(
+            accessibilityID: config.accessibilityID,
+            label: config.label, text: config.text, timeout: config.timeout
+        )
+        try await session.tap(query)
+        return []
+    }
+
+    private func executeType(_ config: FlowTypeConfig) async throws -> [String] {
+        let query: ElementQuery
+        if let field = config.field {
+            query = .byID(field)
+        } else if let id = config.accessibilityID {
+            query = .byID(id)
+        } else {
+            try await session.type(into: .byText(""), text: config.text)
+            return []
+        }
+        try await session.type(into: query, text: config.text)
+        return []
+    }
+
+    private func executeSwipe(_ config: FlowSwipeConfig) async throws -> [String] {
+        guard let direction = SwipeDirection(rawValue: config.direction) else {
+            throw RunError.invalidDirection(config.direction)
+        }
+        try await session.swipe(direction)
+        return []
+    }
+
+    private func executeScreenshot(_ name: String) async throws -> [String] {
+        let data = try await session.screenshot(name)
+        if let outputDir {
+            let path = try saveScreenshot(data, name: name, dir: outputDir)
+            return [path]
+        }
+        return []
+    }
+
+    private func executeWait(_ config: FlowWaitConfig) async throws -> [String] {
+        let query = buildQuery(
+            accessibilityID: config.accessibilityID,
+            label: nil, text: config.text, timeout: config.timeout
+        )
+        try await session.waitFor(query, timeout: config.timeout)
+        return []
+    }
+
+    private func executeAssertVisible(_ config: FlowQueryConfig) async throws -> [String] {
+        if let text = config.text {
+            try await session.assertVisible(text: text)
+        } else if let id = config.accessibilityID {
+            try await session.assertVisible(.byID(id))
+        } else if let label = config.label {
+            try await session.assertVisible(.byLabel(label))
+        }
+        return []
+    }
+
+    private func executeAssertNotVisible(_ config: FlowQueryConfig) async throws -> [String] {
+        if let text = config.text {
+            try await session.assertNotVisible(text: text)
+        }
+        return []
+    }
+
+    private func executeSetPermission(_ config: FlowPermissionConfig) throws -> [String] {
+        guard let permission = AppPermission(rawValue: config.permission) else {
+            throw RunError.invalidPermission(config.permission)
+        }
+        printWarning(
+            "Permission step '\(permission.rawValue)' = \(config.granted) (requires PermissionDriver)"
+        )
+        return []
     }
 
     // MARK: - Helpers

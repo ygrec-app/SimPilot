@@ -271,64 +271,30 @@ public actor HIDDriver: InteractionDriverProtocol {
         }
     }
 
+    // Standard US QWERTY keyboard layout mapping
+    private static let keyCodeMap: [String: CGKeyCode] = [
+        "a": 0x00, "b": 0x0B, "c": 0x08, "d": 0x02, "e": 0x0E,
+        "f": 0x03, "g": 0x05, "h": 0x04, "i": 0x22, "j": 0x26,
+        "k": 0x28, "l": 0x25, "m": 0x2E, "n": 0x2D, "o": 0x1F,
+        "p": 0x23, "q": 0x0C, "r": 0x0F, "s": 0x01, "t": 0x11,
+        "u": 0x20, "v": 0x09, "w": 0x0D, "x": 0x07, "y": 0x10,
+        "z": 0x06, "0": 0x1D, ")": 0x1D, "1": 0x12, "!": 0x12,
+        "2": 0x13, "@": 0x13, "3": 0x14, "#": 0x14, "4": 0x15,
+        "$": 0x15, "5": 0x17, "%": 0x17, "6": 0x16, "^": 0x16,
+        "7": 0x1A, "&": 0x1A, "8": 0x1C, "*": 0x1C, "9": 0x19,
+        "(": 0x19, " ": 0x31, "-": 0x1B, "_": 0x1B, "=": 0x18,
+        "+": 0x18, "[": 0x21, "{": 0x21, "]": 0x1E, "}": 0x1E,
+        "\\": 0x2A, "|": 0x2A, ";": 0x29, ":": 0x29, "'": 0x27,
+        "\"": 0x27, ",": 0x2B, "<": 0x2B, ".": 0x2F, ">": 0x2F,
+        "/": 0x2C, "?": 0x2C, "`": 0x32, "~": 0x32,
+    ]
+
     /// Map a character to (CGKeyCode, needsShift).
     private func cgKeyCodeAndShift(for character: Character) -> (CGKeyCode, Bool) {
-        // Standard US QWERTY keyboard layout
         let lower = character.lowercased()
-        let needsShift = character.isUppercase || "~!@#$%^&*()_+{}|:\"<>?".contains(character)
-
-        let keyCode: CGKeyCode = switch lower {
-        case "a": 0x00
-        case "b": 0x0B
-        case "c": 0x08
-        case "d": 0x02
-        case "e": 0x0E
-        case "f": 0x03
-        case "g": 0x05
-        case "h": 0x04
-        case "i": 0x22
-        case "j": 0x26
-        case "k": 0x28
-        case "l": 0x25
-        case "m": 0x2E
-        case "n": 0x2D
-        case "o": 0x1F
-        case "p": 0x23
-        case "q": 0x0C
-        case "r": 0x0F
-        case "s": 0x01
-        case "t": 0x11
-        case "u": 0x20
-        case "v": 0x09
-        case "w": 0x0D
-        case "x": 0x07
-        case "y": 0x10
-        case "z": 0x06
-        case "0", ")": 0x1D
-        case "1", "!": 0x12
-        case "2", "@": 0x13
-        case "3", "#": 0x14
-        case "4", "$": 0x15
-        case "5", "%": 0x17
-        case "6", "^": 0x16
-        case "7", "&": 0x1A
-        case "8", "*": 0x1C
-        case "9", "(": 0x19
-        case " ": 0x31
-        case "-", "_": 0x1B
-        case "=", "+": 0x18
-        case "[", "{": 0x21
-        case "]", "}": 0x1E
-        case "\\", "|": 0x2A
-        case ";", ":": 0x29
-        case "'", "\"": 0x27
-        case ",", "<": 0x2B
-        case ".", ">": 0x2F
-        case "/", "?": 0x2C
-        case "`", "~": 0x32
-        default: 0x31  // Fallback to space for unsupported characters
-        }
-
+        let needsShift = character.isUppercase
+            || "~!@#$%^&*()_+{}|:\"<>?".contains(character)
+        let keyCode = Self.keyCodeMap[lower] ?? 0x31
         return (keyCode, needsShift)
     }
 

@@ -2,6 +2,7 @@ import ApplicationServices
 import AppKit
 import CoreGraphics
 import Foundation
+import ScreenCaptureKit
 
 /// Reads the iOS Simulator's UI element tree via macOS Accessibility APIs (AXUIElement).
 /// Requires Accessibility permission in System Settings > Privacy & Security > Accessibility.
@@ -24,14 +25,19 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         let simApp = try getSimulatorApp()
         let windowID = try getSimulatorWindowID(for: simApp)
 
-        guard let cgImage = CGWindowListCreateImage(
-            .null,
-            .optionIncludingWindow,
-            windowID,
-            [.boundsIgnoreFraming, .nominalResolution]
-        ) else {
-            throw SimPilotError.screenshotFailed("CGWindowListCreateImage returned nil for window \(windowID)")
+        // Use ScreenCaptureKit to capture the Simulator window
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let scWindow = content.windows.first(where: { $0.windowID == windowID }) else {
+            throw SimPilotError.screenshotFailed("Could not find Simulator window in ScreenCaptureKit")
         }
+
+        let filter = SCContentFilter(desktopIndependentWindow: scWindow)
+        let config = SCStreamConfiguration()
+        config.width = Int(scWindow.frame.width) * 2  // Retina
+        config.height = Int(scWindow.frame.height) * 2
+        config.showsCursor = false
+
+        let cgImage = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
 
         let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
         guard let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
@@ -192,51 +198,33 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
 
     // MARK: - AX Role Mapping
 
+    private static let roleToElementTypeMap: [String: ElementType] = [
+        kAXButtonRole: .button,
+        kAXTextFieldRole: .textField,
+        kAXSecureTextFieldRole: .secureTextField,
+        kAXStaticTextRole: .staticText,
+        kAXImageRole: .image,
+        kAXCellRole: .cell,
+        kAXTableRole: .table,
+        kAXScrollAreaRole: .scrollView,
+        kAXNavigationBarRole: .navigationBar,
+        kAXTabBarRole: .tabBar,
+        kAXToolbarRole: .toolbar,
+        kAXSheetRole: .sheet,
+        kAXCheckBoxRole: .toggle,
+        kAXSliderRole: .slider,
+        kAXPickerRole: .picker,
+        kAXIncrementorRole: .stepper,
+        kAXLinkRole: .link,
+    ]
+
     private func mapRoleToElementType(_ role: String?) -> ElementType {
         guard let role else { return .other }
-
-        switch role {
-        case kAXButtonRole:
-            return .button
-        case kAXTextFieldRole:
-            return .textField
-        case kAXSecureTextFieldRole:
-            return .secureTextField
-        case kAXStaticTextRole:
-            return .staticText
-        case kAXImageRole:
-            return .image
-        case kAXCellRole:
-            return .cell
-        case kAXTableRole:
-            return .table
-        case kAXScrollAreaRole:
-            return .scrollView
-        case kAXNavigationBarRole:
-            return .navigationBar
-        case kAXTabBarRole:
-            return .tabBar
-        case kAXToolbarRole:
-            return .toolbar
-        case kAXSheetRole:
-            return .sheet
-        case kAXCheckBoxRole:
-            return .toggle
-        case kAXSliderRole:
-            return .slider
-        case kAXPickerRole:
-            return .picker
-        case kAXIncrementorRole:
-            return .stepper
-        case kAXLinkRole:
-            return .link
-        default:
-            // Some roles don't have predefined constants
-            if role.contains("Alert") { return .alert }
-            if role.contains("CollectionView") || role.contains("Grid") { return .collectionView }
-            if role.contains("TabBar") { return .tabBar }
-            return .other
-        }
+        if let mapped = Self.roleToElementTypeMap[role] { return mapped }
+        if role.contains("Alert") { return .alert }
+        if role.contains("CollectionView") || role.contains("Grid") { return .collectionView }
+        if role.contains("TabBar") { return .tabBar }
+        return .other
     }
 
     private func mapRoleToTraits(_ role: String?, isEnabled: Bool) -> Set<AccessibilityTrait> {
