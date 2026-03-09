@@ -24,18 +24,20 @@ ln -s $(pwd)/.build/release/simpilot /usr/local/bin/simpilot
 
 ### Use with Claude Code (MCP)
 
-Add to your Claude Code MCP configuration (`~/.claude/claude_desktop_config.json` or project-level `.mcp.json`):
+Add to your project-level `.mcp.json` (or `~/.claude/claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "simpilot": {
-      "command": "simpilot",
+      "command": "/path/to/SimPilot/.build/release/simpilot",
       "args": ["mcp"]
     }
   }
 }
 ```
+
+Replace `/path/to/SimPilot` with the actual path where you cloned the repo. If you added `simpilot` to your `PATH` (see symlink step above), you can use just `"simpilot"` as the command.
 
 Then ask Claude: "Launch my app and test the login flow."
 

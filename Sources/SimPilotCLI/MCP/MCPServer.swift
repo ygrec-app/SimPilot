@@ -742,7 +742,7 @@ actor SimPilotMCPServer {
     // MARK: - UI Interaction Handlers
 
     private func handleTap(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let query = buildQuery(from: args)
         try await session.tap(query)
         return CallTool.Result(content: [.text("Tapped element matching: \(query.description)")])
@@ -752,7 +752,7 @@ actor SimPilotMCPServer {
         guard let text = args["text"]?.stringValue else {
             return CallTool.Result(content: [.text("Missing required parameter: text")], isError: true)
         }
-        let session = try requireSession()
+        let session = try await requireSession()
         let query = ElementQuery(
             accessibilityID: args["accessibility_id"]?.stringValue,
             label: args["label"]?.stringValue
@@ -771,13 +771,13 @@ actor SimPilotMCPServer {
               let direction = SwipeDirection(rawValue: dirStr) else {
             return CallTool.Result(content: [.text("Missing or invalid parameter: direction (up/down/left/right)")], isError: true)
         }
-        let session = try requireSession()
+        let session = try await requireSession()
         try await session.swipe(direction)
         return CallTool.Result(content: [.text("Swiped \(dirStr)")])
     }
 
     private func handleLongPress(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let query = buildQuery(from: args)
         // Long press requires resolving the element then using the interaction driver
         // Session doesn't expose longPress directly, so resolve + call driver
@@ -817,7 +817,7 @@ actor SimPilotMCPServer {
     // MARK: - Inspection Handlers
 
     private func handleScreenshot(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let data = try await session.screenshot(args["filename"]?.stringValue)
         let base64 = data.base64EncodedString()
         return CallTool.Result(content: [
@@ -826,7 +826,7 @@ actor SimPilotMCPServer {
     }
 
     private func handleGetTree(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let tree = try await session.getTree()
         let maxDepth = args["max_depth"]?.intValue
         let json = elementToJSON(tree.root, maxDepth: maxDepth)
@@ -834,7 +834,7 @@ actor SimPilotMCPServer {
     }
 
     private func handleFindElements(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let tree = try await session.getTree()
         let query = buildQuery(from: args)
         let matches = collectMatching(tree.root, query: query)
@@ -853,7 +853,7 @@ actor SimPilotMCPServer {
     // MARK: - Assertion Handlers
 
     private func handleAssertVisible(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let query = buildQuery(from: args)
         if let text = query.text ?? query.label {
             try await session.assertVisible(text: text)
@@ -866,14 +866,14 @@ actor SimPilotMCPServer {
     }
 
     private func handleAssertNotVisible(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let text = args["text"]?.stringValue ?? args["label"]?.stringValue ?? args["accessibility_id"]?.stringValue ?? ""
         try await session.assertNotVisible(text: text)
         return CallTool.Result(content: [.text("{\"passed\":true,\"details\":\"Confirmed not visible\"}")])
     }
 
     private func handleWaitFor(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try requireSession()
+        let session = try await requireSession()
         let query = buildQuery(from: args)
         let timeout = args["timeout"]?.numericValue ?? 10.0
         try await session.waitFor(query, timeout: timeout)
@@ -882,7 +882,7 @@ actor SimPilotMCPServer {
 
     private func handleWaitForStable(_ args: [String: Value]) async throws -> CallTool.Result {
         // Wait for stable requires comparing screenshots — use a polling approach
-        let session = try requireSession()
+        let session = try await requireSession()
         let timeout = args["timeout"]?.numericValue ?? 5.0
         let deadline = ContinuousClock.now + .seconds(timeout)
         var previous = try await session.screenshot()
@@ -1047,12 +1047,31 @@ actor SimPilotMCPServer {
 
     // MARK: - Helpers
 
-    private func requireSession() throws -> Session {
-        guard let session = activeSession else {
+    private func requireSession() async throws -> Session {
+        if let session = activeSession {
+            return session
+        }
+
+        // Auto-create a session if a booted simulator is detected
+        let devices = try await getSimctlDriver().listDevices()
+        guard let booted = bootedDevice ?? devices.first(where: { $0.state == .booted }) else {
             throw SimPilotError.invalidConfiguration(
-                "No active session. Use simpilot_session_start first."
+                "No active session and no booted simulator found. Use simpilot_session_start or simpilot_boot first."
             )
         }
+
+        bootedDevice = booted
+        let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
+        let hidDriver = DriverFactory.makeHIDDriver(udid: booted.udid)
+
+        let session = Session(
+            device: booted,
+            bundleID: nil,
+            simulatorDriver: getSimctlDriver(),
+            interactionDriver: hidDriver,
+            introspectionDriver: accessibilityDriver
+        )
+        activeSession = session
         return session
     }
 

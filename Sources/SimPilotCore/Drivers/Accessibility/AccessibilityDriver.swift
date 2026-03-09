@@ -23,7 +23,7 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         }
 
         let simApp = try getSimulatorApp()
-        let windowID = try getSimulatorWindowID(for: simApp)
+        let windowID = try await getSimulatorWindowIDWithRetry(for: simApp)
 
         // Use ScreenCaptureKit to capture the Simulator window
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -88,22 +88,42 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         return AXUIElementCreateApplication(simApp.processIdentifier)
     }
 
+    /// Get the CGWindowID for the Simulator's main window, retrying if the window isn't ready yet.
+    private func getSimulatorWindowIDWithRetry(for appElement: AXUIElement, attempts: Int = 5) async throws -> CGWindowID {
+        for attempt in 1...attempts {
+            if let windowID = try? getSimulatorWindowID(for: appElement) {
+                return windowID
+            }
+            if attempt < attempts {
+                try await Task.sleep(for: .seconds(1))
+            }
+        }
+        return try getSimulatorWindowID(for: appElement)
+    }
+
     /// Get the CGWindowID for the Simulator's main window.
     private func getSimulatorWindowID(for appElement: AXUIElement) throws -> CGWindowID {
         var windowsValue: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue)
 
-        guard result == .success,
-              let windows = windowsValue as? [AXUIElement],
-              let firstWindow = windows.first else {
-            throw SimPilotError.screenshotFailed("Could not get Simulator window")
+        guard result == .success else {
+            throw SimPilotError.screenshotFailed(
+                "AX window query failed (error \(result.rawValue)). "
+                + "Ensure Simulator has a visible window and the process has Accessibility permission."
+            )
+        }
+
+        guard let windows = windowsValue as? [AXUIElement], let firstWindow = windows.first else {
+            throw SimPilotError.screenshotFailed(
+                "Simulator is running but has no visible windows. Ensure the Simulator window is open (not minimized)."
+            )
         }
 
         var windowIDValue: CGWindowID = 0
         // _AXUIElementGetWindow is a private but commonly used API for getting CGWindowID
         let err = _AXUIElementGetWindow(firstWindow, &windowIDValue)
         guard err == .success else {
-            throw SimPilotError.screenshotFailed("Could not get window ID from AXUIElement")
+            throw SimPilotError.screenshotFailed("Could not get window ID from AXUIElement (error \(err.rawValue))")
         }
 
         return windowIDValue

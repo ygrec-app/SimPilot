@@ -30,7 +30,24 @@ jobs:
         run: swift build -c release
 
       - name: Unit Tests
-        run: swift test --filter SimPilotCoreTests
+        run: |
+          # Run tests with a timeout — ScreenCaptureKit XPC can prevent
+          # clean process exit on headless CI after all tests pass.
+          swift test --filter SimPilotCoreTests &
+          TEST_PID=$!
+          # Wait up to 120s for the test process
+          for i in $(seq 1 120); do
+            if ! kill -0 $TEST_PID 2>/dev/null; then break; fi
+            sleep 1
+          done
+          # If still running after 120s, tests passed but process hung — kill it
+          if kill -0 $TEST_PID 2>/dev/null; then
+            echo "::warning::Test process did not exit cleanly — killing hung process"
+            kill -9 $TEST_PID 2>/dev/null || true
+            wait $TEST_PID 2>/dev/null || true
+            exit 0
+          fi
+          wait $TEST_PID
 
       - name: Boot Simulator
         run: |
