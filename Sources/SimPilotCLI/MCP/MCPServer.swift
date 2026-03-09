@@ -374,7 +374,10 @@ enum SimPilotTools {
                     ]),
                     "permission": .object([
                         "type": .string("string"),
-                        "description": .string("Permission name: camera, microphone, photos, location, contacts, calendar, reminders, notifications, faceID"),
+                        "description": .string(
+                            "Permission name: camera, microphone, photos, location, "
+                            + "contacts, calendar, reminders, notifications, faceID"
+                        ),
                     ]),
                     "granted": .object([
                         "type": .string("boolean"),
@@ -478,7 +481,8 @@ enum SimPilotTools {
     static let session: [Tool] = [
         Tool(
             name: "simpilot_session_start",
-            description: "Start a new SimPilot session. Boots the simulator and optionally launches an app. All subsequent actions are recorded.",
+            description: "Start a new SimPilot session. Boots the simulator and optionally launches an app. "
+                + "All subsequent actions are recorded.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -586,78 +590,54 @@ actor SimPilotMCPServer {
 
     // MARK: - Tool Dispatch
 
+    private typealias ToolHandler = ([String: Value]) async throws -> CallTool.Result
+
+    private var toolHandlers: [String: ToolHandler] {
+        [
+            // Simulator Lifecycle
+            "simpilot_list_devices": { _ in try await self.handleListDevices() },
+            "simpilot_boot": { try await self.handleBoot($0) },
+            "simpilot_shutdown": { try await self.handleShutdown($0) },
+            "simpilot_launch_app": { try await self.handleLaunchApp($0) },
+            "simpilot_terminate_app": { try await self.handleTerminateApp($0) },
+            "simpilot_erase": { try await self.handleErase($0) },
+            // UI Interaction
+            "simpilot_tap": { try await self.handleTap($0) },
+            "simpilot_type": { try await self.handleType($0) },
+            "simpilot_swipe": { try await self.handleSwipe($0) },
+            "simpilot_long_press": { try await self.handleLongPress($0) },
+            "simpilot_press_button": { try await self.handlePressButton($0) },
+            // Inspection
+            "simpilot_screenshot": { try await self.handleScreenshot($0) },
+            "simpilot_get_tree": { try await self.handleGetTree($0) },
+            "simpilot_find_elements": { try await self.handleFindElements($0) },
+            // Assertions
+            "simpilot_assert_visible": { try await self.handleAssertVisible($0) },
+            "simpilot_assert_not_visible": { try await self.handleAssertNotVisible($0) },
+            "simpilot_wait_for": { try await self.handleWaitFor($0) },
+            "simpilot_wait_for_stable": { try await self.handleWaitForStable($0) },
+            // System
+            "simpilot_set_permission": { try await self.handleSetPermission($0) },
+            "simpilot_set_location": { try await self.handleSetLocation($0) },
+            "simpilot_send_push": { try await self.handleSendPush($0) },
+            "simpilot_open_url": { try await self.handleOpenURL($0) },
+            "simpilot_set_status_bar": { try await self.handleSetStatusBar($0) },
+            // Session
+            "simpilot_session_start": { try await self.handleSessionStart($0) },
+            "simpilot_session_end": { _ in try await self.handleSessionEnd() },
+        ]
+    }
+
     private func handleToolCall(_ params: CallTool.Parameters) async -> CallTool.Result {
         let args = params.arguments ?? [:]
         do {
-            switch params.name {
-            // Simulator Lifecycle
-            case "simpilot_list_devices":
-                return try await handleListDevices()
-            case "simpilot_boot":
-                return try await handleBoot(args)
-            case "simpilot_shutdown":
-                return try await handleShutdown(args)
-            case "simpilot_launch_app":
-                return try await handleLaunchApp(args)
-            case "simpilot_terminate_app":
-                return try await handleTerminateApp(args)
-            case "simpilot_erase":
-                return try await handleErase(args)
-
-            // UI Interaction
-            case "simpilot_tap":
-                return try await handleTap(args)
-            case "simpilot_type":
-                return try await handleType(args)
-            case "simpilot_swipe":
-                return try await handleSwipe(args)
-            case "simpilot_long_press":
-                return try await handleLongPress(args)
-            case "simpilot_press_button":
-                return try await handlePressButton(args)
-
-            // Inspection
-            case "simpilot_screenshot":
-                return try await handleScreenshot(args)
-            case "simpilot_get_tree":
-                return try await handleGetTree(args)
-            case "simpilot_find_elements":
-                return try await handleFindElements(args)
-
-            // Assertions
-            case "simpilot_assert_visible":
-                return try await handleAssertVisible(args)
-            case "simpilot_assert_not_visible":
-                return try await handleAssertNotVisible(args)
-            case "simpilot_wait_for":
-                return try await handleWaitFor(args)
-            case "simpilot_wait_for_stable":
-                return try await handleWaitForStable(args)
-
-            // System
-            case "simpilot_set_permission":
-                return try await handleSetPermission(args)
-            case "simpilot_set_location":
-                return try await handleSetLocation(args)
-            case "simpilot_send_push":
-                return try await handleSendPush(args)
-            case "simpilot_open_url":
-                return try await handleOpenURL(args)
-            case "simpilot_set_status_bar":
-                return try await handleSetStatusBar(args)
-
-            // Session
-            case "simpilot_session_start":
-                return try await handleSessionStart(args)
-            case "simpilot_session_end":
-                return try await handleSessionEnd()
-
-            default:
+            guard let handler = toolHandlers[params.name] else {
                 return CallTool.Result(
                     content: [.text("Unknown tool: \(params.name)")],
                     isError: true
                 )
             }
+            return try await handler(args)
         } catch {
             return CallTool.Result(
                 content: [.text("Error: \(error)")],
@@ -859,9 +839,13 @@ actor SimPilotMCPServer {
         let query = buildQuery(from: args)
         let matches = collectMatching(tree.root, query: query)
         let summaries = matches.map { el in
-            """
-            {"id":\(el.id.map { "\"\($0)\"" } ?? "null"),"label":\(el.label.map { "\"\($0)\"" } ?? "null"),"type":"\(el.elementType.rawValue)","frame":{"x":\(el.frame.origin.x),"y":\(el.frame.origin.y),"width":\(el.frame.size.width),"height":\(el.frame.size.height)}}
-            """
+            let idStr = el.id.map { "\"\($0)\"" } ?? "null"
+            let labelStr = el.label.map { "\"\($0)\"" } ?? "null"
+            let f = el.frame
+            return "{\"id\":\(idStr),\"label\":\(labelStr),"
+                + "\"type\":\"\(el.elementType.rawValue)\","
+                + "\"frame\":{\"x\":\(f.origin.x),\"y\":\(f.origin.y),"
+                + "\"width\":\(f.size.width),\"height\":\(f.size.height)}}"
         }
         return CallTool.Result(content: [.text("[\(summaries.joined(separator: ","))]")])
     }
@@ -957,9 +941,13 @@ actor SimPilotMCPServer {
         ]
         if let customData = args["data"]?.objectValue {
             for (key, value) in customData {
-                if let s = value.stringValue { aps[key] = s }
-                else if let i = value.intValue { aps[key] = i }
-                else if let b = value.boolValue { aps[key] = b }
+                if let s = value.stringValue {
+                    aps[key] = s
+                } else if let i = value.intValue {
+                    aps[key] = i
+                } else if let b = value.boolValue {
+                    aps[key] = b
+                }
             }
         }
         let payload: [String: Any] = ["aps": aps]
