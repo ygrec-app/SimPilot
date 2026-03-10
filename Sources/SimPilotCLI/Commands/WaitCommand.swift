@@ -30,7 +30,7 @@ struct WaitCommand: AsyncParsableCommand {
     }
 
     func run() async throws {
-        let introspection = DriverFactory.makeAccessibilityDriver()
+        let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
         let resolver = ElementResolver(introspectionDriver: introspection)
 
         let query = ElementQuery(

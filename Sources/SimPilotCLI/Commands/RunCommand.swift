@@ -135,11 +135,11 @@ struct RunCommand: AsyncParsableCommand {
         }
 
         let simctlDriver = DriverFactory.makeSimctlDriver()
-        let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
+        let accessibilityDriver = DriverFactory.makeAccessibilityDriver(checkPermission: true)
 
         // Boot device to get UDID for HID driver
         let deviceInfo = try await DriverFactory.bootDevice(name: deviceName)
-        let hidDriver = DriverFactory.makeHIDDriver(udid: deviceInfo.udid)
+        let hidDriver = DriverFactory.makeHIDDriver(udid: deviceInfo.udid, checkPermission: true)
 
         builder = builder
             .simulatorDriver(simctlDriver)

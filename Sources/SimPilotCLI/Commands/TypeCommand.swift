@@ -25,8 +25,8 @@ struct TypeCommand: AsyncParsableCommand {
 
     func run() async throws {
         let device = try await DriverFactory.bootDevice(name: deviceOption.device)
-        let introspection = DriverFactory.makeAccessibilityDriver()
-        let interaction = DriverFactory.makeHIDDriver(udid: device.udid)
+        let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
+        let interaction = DriverFactory.makeHIDDriver(udid: device.udid, checkPermission: true)
 
         // If a field is specified, tap it first to focus
         if field != nil || label != nil {

@@ -563,6 +563,17 @@ actor SimPilotMCPServer {
         return device
     }
 
+    /// Return a booted device, auto-detecting one if not already tracked.
+    private func requireBootedDeviceOrDetect() async throws -> DeviceInfo {
+        if let device = bootedDevice { return device }
+        let devices = try await getSimctlDriver().listDevices()
+        guard let booted = devices.first(where: { $0.state == .booted }) else {
+            throw SimPilotError.simulatorNotBooted("No booted simulator found. Use simpilot_boot first.")
+        }
+        bootedDevice = booted
+        return booted
+    }
+
     // MARK: - Server Setup
 
     func run() async throws {
@@ -817,8 +828,10 @@ actor SimPilotMCPServer {
     // MARK: - Inspection Handlers
 
     private func handleScreenshot(_ args: [String: Value]) async throws -> CallTool.Result {
-        let session = try await requireSession()
-        let data = try await session.screenshot(args["filename"]?.stringValue)
+        // Use simctl for screenshots — works regardless of window visibility,
+        // Spaces, fullscreen, or Screen Recording permissions.
+        let device = try await requireBootedDeviceOrDetect()
+        let data = try await getSimctlDriver().screenshot(udid: device.udid)
         let base64 = data.base64EncodedString()
         return CallTool.Result(content: [
             .image(data: base64, mimeType: "image/png", metadata: nil),

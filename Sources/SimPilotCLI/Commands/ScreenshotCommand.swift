@@ -18,7 +18,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let introspection = DriverFactory.makeAccessibilityDriver()
+        let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
         let data = try await introspection.screenshot()
 
         let timestamp = ISO8601DateFormatter().string(from: Date())

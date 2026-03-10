@@ -24,7 +24,7 @@ struct TreeCommand: AsyncParsableCommand {
     }
 
     func run() async throws {
-        let introspection = DriverFactory.makeAccessibilityDriver()
+        let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
         let tree = try await introspection.getElementTree()
 
         if output.json || format == "json" {

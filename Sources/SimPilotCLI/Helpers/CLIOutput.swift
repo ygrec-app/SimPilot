@@ -76,13 +76,13 @@ enum DriverFactory {
         CLISimctlDriver()
     }
 
-    static func makeAccessibilityDriver() -> AccessibilityDriver {
-        checkAccessibilityPermission()
+    static func makeAccessibilityDriver(checkPermission: Bool = false) -> AccessibilityDriver {
+        if checkPermission { checkAccessibilityPermission() }
         return AccessibilityDriver()
     }
 
-    static func makeHIDDriver(udid: String) -> HIDDriver {
-        checkAccessibilityPermission()
+    static func makeHIDDriver(udid: String, checkPermission: Bool = false) -> HIDDriver {
+        if checkPermission { checkAccessibilityPermission() }
         return HIDDriver(udid: udid)
     }
 

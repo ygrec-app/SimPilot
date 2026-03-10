@@ -34,8 +34,8 @@ struct TapCommand: AsyncParsableCommand {
 
     func run() async throws {
         let device = try await DriverFactory.bootDevice(name: deviceOption.device)
-        let introspection = DriverFactory.makeAccessibilityDriver()
-        let interaction = DriverFactory.makeHIDDriver(udid: device.udid)
+        let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
+        let interaction = DriverFactory.makeHIDDriver(udid: device.udid, checkPermission: true)
 
         let resolver = ElementResolver(introspectionDriver: introspection)
 

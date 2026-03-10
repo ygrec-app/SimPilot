@@ -26,7 +26,7 @@ struct SwipeCommand: AsyncParsableCommand {
     func run() async throws {
         let swipeDir = SwipeDirection(rawValue: direction)!
         let device = try await DriverFactory.bootDevice(name: deviceOption.device)
-        let interaction = DriverFactory.makeHIDDriver(udid: device.udid)
+        let interaction = DriverFactory.makeHIDDriver(udid: device.udid, checkPermission: true)
 
         let screenCenter = CGPoint(x: 187, y: 406)
         let target: CGPoint = switch swipeDir {

@@ -135,6 +135,14 @@ actor CLISimctlDriver: SimulatorDriverProtocol {
         try await executeDiscarding(["push", udid, bundleID, tempURL.path])
     }
 
+    func screenshot(udid: String) async throws -> Data {
+        let data = try await execute(["io", udid, "screenshot", "--type=png", "-"])
+        guard !data.isEmpty else {
+            throw SimPilotError.screenshotFailed("simctl returned empty screenshot data")
+        }
+        return data
+    }
+
     func setStatusBar(udid: String, overrides: StatusBarOverrides) async throws {
         var args = ["status_bar", udid, "override"]
         if let time = overrides.time { args += ["--time", time] }

@@ -42,7 +42,7 @@ struct AssertCommand: AsyncParsableCommand {
         }
 
         func run() async throws {
-            let introspection = DriverFactory.makeAccessibilityDriver()
+            let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
             let resolver = ElementResolver(introspectionDriver: introspection)
 
             let query = ElementQuery(
@@ -96,7 +96,7 @@ struct AssertCommand: AsyncParsableCommand {
         }
 
         func run() async throws {
-            let introspection = DriverFactory.makeAccessibilityDriver()
+            let introspection = DriverFactory.makeAccessibilityDriver(checkPermission: true)
             let resolver = ElementResolver(
                 introspectionDriver: introspection,
                 config: ResolverConfig(defaultTimeout: 0.5, pollInterval: 100, enableOCRFallback: false)
