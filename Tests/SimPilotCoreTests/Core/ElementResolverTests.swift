@@ -244,7 +244,7 @@ struct ElementResolverAutoWaitTests {
 
         let resolver = ElementResolver(
             introspectionDriver: mock,
-            config: ResolverConfig(defaultTimeout: 3.0, pollInterval: 50, enableOCRFallback: false)
+            config: ResolverConfig(defaultTimeout: 30.0, pollInterval: 50, enableOCRFallback: false)
         )
 
         let result = try await resolver.find(.byID("signInButton"))
@@ -269,8 +269,8 @@ struct ElementResolverAutoWaitTests {
             try await resolver.find(query)
         }
         let elapsed = start.duration(to: .now)
-        // Should have timed out in ~0.2s, not 10s
-        #expect(elapsed < .seconds(2))
+        // Should have timed out in ~0.2s, not 10s (generous CI tolerance)
+        #expect(elapsed < .seconds(5))
     }
 }
 

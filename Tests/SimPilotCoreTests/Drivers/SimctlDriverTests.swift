@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import SimPilotCore
 
-@Suite("SimctlDriver Tests")
+@Suite("SimctlDriver Tests", .serialized)
 struct SimctlDriverTests {
 
     // MARK: - JSON Parsing Tests

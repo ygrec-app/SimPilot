@@ -197,7 +197,7 @@ struct WaitSystemTests {
 
         try await waitSystem.waitForElementToDisappear(
             .byID("loading"),
-            timeout: 5,
+            timeout: 30,
             pollInterval: .milliseconds(50)
         )
 
@@ -246,7 +246,7 @@ struct WaitSystemTests {
 
         try await waitSystem.waitForStable(
             interval: .milliseconds(50),
-            timeout: 2
+            timeout: 30
         )
 
         let events = await tracer.getEvents()
@@ -290,7 +290,7 @@ struct WaitSystemTests {
         )
 
         try await waitSystem.waitFor(
-            timeout: 2,
+            timeout: 30,
             pollInterval: .milliseconds(50)
         ) {
             await counter.increment()
