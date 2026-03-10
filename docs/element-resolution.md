@@ -112,9 +112,27 @@ Presets:
 - `ResolverConfig.fast` — 2s timeout, 100ms poll
 - `ResolverConfig.patient` — 15s timeout, 500ms poll
 
+## Coordinate-Based Interaction
+
+When element resolution fails (common with SwiftUI views that lack accessibility metadata), you can bypass it entirely using device-point coordinates:
+
+1. Use `simpilot_find_elements` or `simpilot_get_tree` to discover element frames
+2. The response includes `center` coordinates for each element
+3. Pass those coordinates directly to `simpilot_tap`, `simpilot_type`, `simpilot_long_press`, or `simpilot_swipe`
+
+```bash
+# MCP: find elements, then tap by coordinates
+simpilot_find_elements(element_type: "button")
+# → [{"label": "Sign Up", "center": {"x": 200, "y": 400}, ...}]
+simpilot_tap(x: 200, y: 400)
+```
+
+Coordinates are in **device points** (the same coordinate space as element frames). They are automatically converted to screen coordinates for interaction.
+
 ## Tips
 
 - **Set accessibility identifiers** on key elements in your app. This makes tests faster, more reliable, and locale-independent.
 - **Use `--text` for quick exploration**, then switch to `--id` for stable tests.
 - **Combine type and text** to disambiguate: `--text "Submit" --type button` avoids matching a label that also says "Submit".
 - **Use `get_tree`** to inspect the current accessibility tree and discover element IDs and labels.
+- **Use coordinates as a reliable fallback** when accessibility data is sparse — `simpilot_find_elements` + `simpilot_tap(x, y)` always works.

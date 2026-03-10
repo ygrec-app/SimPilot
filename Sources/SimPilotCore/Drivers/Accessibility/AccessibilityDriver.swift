@@ -53,7 +53,12 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         }
 
         let simApp = try getSimulatorApp()
-        let root = walkTree(simApp, depth: 0)
+
+        // Determine the content area origin so we can convert
+        // macOS screen coordinates → device-relative coordinates.
+        let contentOrigin = getContentAreaOrigin(for: simApp)
+
+        let root = walkTree(simApp, depth: 0, contentOrigin: contentOrigin)
         return ElementTree(root: root)
     }
 
@@ -63,6 +68,8 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         }
 
         let simApp = try getSimulatorApp()
+        let contentOrigin = getContentAreaOrigin(for: simApp)
+
         var focusedValue: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(simApp, kAXFocusedUIElementAttribute as CFString, &focusedValue)
 
@@ -72,10 +79,32 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
 
         // swiftlint:disable:next force_cast
         let axElement = focused as! AXUIElement
-        return walkTree(axElement, depth: 0)
+        return walkTree(axElement, depth: 0, contentOrigin: contentOrigin)
     }
 
     // MARK: - Private Helpers
+
+    /// Determine where the Simulator's device content area starts in screen coordinates.
+    /// This is the window origin + title bar height. We subtract this from all AX frames
+    /// to convert from macOS screen coordinates to device-relative coordinates.
+    private func getContentAreaOrigin(for appElement: AXUIElement) -> CGPoint {
+        var windowsValue: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            appElement, kAXWindowsAttribute as CFString, &windowsValue
+        )
+        guard result == .success,
+              let windows = windowsValue as? [AXUIElement],
+              let window = windows.first else {
+            return .zero
+        }
+
+        let windowFrame = getFrameAttribute(window)
+        let titleBarHeight: CGFloat = 28
+        return CGPoint(
+            x: windowFrame.origin.x,
+            y: windowFrame.origin.y + titleBarHeight
+        )
+    }
 
     /// Find the Simulator.app process and return its AXUIElement.
     private func getSimulatorApp() throws -> AXUIElement {
@@ -130,7 +159,9 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
     }
 
     /// Recursively walk the AXUIElement tree and convert to our Element model.
-    private func walkTree(_ axElement: AXUIElement, depth: Int) -> Element {
+    /// Frames are converted from macOS screen coordinates to device-relative coordinates
+    /// by subtracting `contentOrigin`.
+    private func walkTree(_ axElement: AXUIElement, depth: Int, contentOrigin: CGPoint) -> Element {
         guard depth < maxDepth else {
             return Element(
                 id: nil, label: nil, value: nil, elementType: .other,
@@ -142,7 +173,16 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
         let title = getStringAttribute(axElement, kAXTitleAttribute)
         let value = getStringAttribute(axElement, kAXValueAttribute)
         let identifier = getStringAttribute(axElement, kAXIdentifierAttribute)
-        let frame = getFrameAttribute(axElement)
+        let rawFrame = getFrameAttribute(axElement)
+
+        // Convert from macOS screen coordinates to device-relative coordinates
+        let frame = CGRect(
+            x: rawFrame.origin.x - contentOrigin.x,
+            y: rawFrame.origin.y - contentOrigin.y,
+            width: rawFrame.size.width,
+            height: rawFrame.size.height
+        )
+
         let isEnabled = getBoolAttribute(axElement, kAXEnabledAttribute) ?? true
 
         // Recursively process children
@@ -154,7 +194,7 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
             &childrenValue
         )
         if childResult == .success, let axChildren = childrenValue as? [AXUIElement] {
-            children = axChildren.map { walkTree($0, depth: depth + 1) }
+            children = axChildren.map { walkTree($0, depth: depth + 1, contentOrigin: contentOrigin) }
         }
 
         let elementType = mapRoleToElementType(role)

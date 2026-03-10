@@ -151,7 +151,7 @@ Debug crashes                    Assert visible / not visible
 +-----------------------------------------------------------+
 ```
 
-Element resolution follows a progressive fallback chain: Accessibility ID -> Label -> Text (OCR) -> Coordinate. Each strategy falls back to the next automatically.
+Element resolution follows a progressive fallback chain: Accessibility ID -> Label -> Text (OCR). Each strategy falls back to the next automatically. All tools also accept raw device-point coordinates (x/y) for direct interaction without element lookup.
 
 ---
 

@@ -39,6 +39,12 @@ public actor Session {
         actionCount += 1
     }
 
+    /// Tap at specific device-relative coordinates.
+    public func tap(x: Double, y: Double) async throws {
+        try await interactionDriver.tap(point: CGPoint(x: x, y: y))
+        actionCount += 1
+    }
+
     public func tap(text: String) async throws {
         try await tap(.byText(text))
     }
@@ -53,6 +59,12 @@ public actor Session {
         let resolved = try await resolveElement(query)
         try await interactionDriver.tap(point: resolved.element.center)
         try await Task.sleep(for: .milliseconds(200))
+        try await interactionDriver.typeText(text)
+        actionCount += 1
+    }
+
+    /// Type text into whatever is currently focused (no element lookup).
+    public func typeText(_ text: String) async throws {
         try await interactionDriver.typeText(text)
         actionCount += 1
     }
@@ -74,6 +86,44 @@ public actor Session {
         }
         try await interactionDriver.swipe(from: screenCenter, to: target, duration: 0.3)
         actionCount += 1
+    }
+
+    /// Swipe between specific device-relative coordinates.
+    public func swipe(fromX: Double, fromY: Double, toX: Double, toY: Double, duration: TimeInterval = 0.3) async throws {
+        try await interactionDriver.swipe(
+            from: CGPoint(x: fromX, y: fromY),
+            to: CGPoint(x: toX, y: toY),
+            duration: duration
+        )
+        actionCount += 1
+    }
+
+    // MARK: - Long Press
+
+    /// Long press an element found by query.
+    public func longPress(_ query: ElementQuery, duration: TimeInterval = 1.0) async throws {
+        let resolved = try await resolveElement(query)
+        try await interactionDriver.longPress(point: resolved.element.center, duration: duration)
+        actionCount += 1
+    }
+
+    /// Long press at specific device-relative coordinates.
+    public func longPress(x: Double, y: Double, duration: TimeInterval = 1.0) async throws {
+        try await interactionDriver.longPress(point: CGPoint(x: x, y: y), duration: duration)
+        actionCount += 1
+    }
+
+    // MARK: - Keyboard
+
+    /// Press a keyboard key (Return, Delete, Tab, Escape, etc.).
+    public func pressKey(_ key: KeyboardKey) async throws {
+        try await interactionDriver.pressKey(key)
+        actionCount += 1
+    }
+
+    /// Dismiss the keyboard by pressing Escape.
+    public func dismissKeyboard() async throws {
+        try await interactionDriver.pressKey(.escape)
     }
 
     // MARK: - Wait

@@ -5,6 +5,23 @@ All notable changes to SimPilot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-10
+
+### Fixed
+
+- **Coordinate system mismatch** — AX frames were in macOS screen coordinates while HIDDriver expected device-relative points, causing all element-based taps to miss their targets (double-offset). AccessibilityDriver now converts frames to device-relative coordinates during tree construction.
+- **`simpilot_long_press`** — Was silently falling back to a regular tap. Now actually performs a long press with proper duration.
+
+### Added
+
+- **Coordinate-based tap** — `simpilot_tap` accepts `x`/`y` device-point coordinates, bypassing element resolution entirely. Always works regardless of accessibility labels.
+- **Coordinate-based type** — `simpilot_type` accepts `x`/`y` to tap a field before typing. When called with only `text`, types into the currently focused field.
+- **Coordinate-based swipe** — `simpilot_swipe` accepts `from_x`/`from_y`/`to_x`/`to_y` for precise gesture control.
+- **Coordinate-based long press** — `simpilot_long_press` accepts `x`/`y` coordinates.
+- **`simpilot_press_key`** — Press keyboard keys: return, delete, tab, escape, space. Useful for form navigation and dismissing system sheets.
+- **`simpilot_dismiss_keyboard`** — Convenience tool to dismiss the on-screen keyboard.
+- **`simpilot_find_elements` improvements** — Response now includes `center` coordinates and `value` field, so coordinates can be used directly with `simpilot_tap`.
+
 ## [1.0.0] - 2026-03-09
 
 ### Added
@@ -25,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SessionManager` — full session lifecycle with builder pattern
 
 - **Consumer Layer**
-  - MCP Server with 25 tools for AI agent integration (Claude Code, Cursor, etc.)
+  - MCP Server with 27 tools for AI agent integration (Claude Code, Cursor, etc.)
   - CLI with 15 subcommands (devices, app, tap, type, swipe, screenshot, tree, assert, wait, permission, push, location, url, run, mcp)
   - YAML flow runner for declarative test flows
   - Python SDK wrapping CLI with clean API

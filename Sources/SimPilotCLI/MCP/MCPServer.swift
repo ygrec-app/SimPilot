@@ -6,7 +6,7 @@ import SimPilotCore
 
 /// All SimPilot MCP tool definitions, grouped by category.
 enum SimPilotTools {
-    static let all: [Tool] = simulatorLifecycle + uiInteraction + inspection + assertions + system + session
+    static let all: [Tool] = simulatorLifecycle + uiInteraction + inspection + assertions + system + session + keyboard
 
     // MARK: Simulator Lifecycle
 
@@ -106,13 +106,25 @@ enum SimPilotTools {
     static let uiInteraction: [Tool] = [
         Tool(
             name: "simpilot_tap",
-            description: "Tap a UI element. Finds by accessibility ID, label, or visible text. Auto-waits until found.",
+            description: """
+                Tap a UI element. Use EITHER coordinates (x/y) OR a query (accessibility_id/label/text).
+                Coordinates are in device points (from simpilot_find_elements or simpilot_get_tree frames).
+                When using coordinates, no element lookup is performed — this always works.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
+                    "x": .object([
+                        "type": .string("number"),
+                        "description": .string("X coordinate in device points (use center of element frame from find_elements)"),
+                    ]),
+                    "y": .object([
+                        "type": .string("number"),
+                        "description": .string("Y coordinate in device points (use center of element frame from find_elements)"),
+                    ]),
                     "accessibility_id": .object([
                         "type": .string("string"),
-                        "description": .string("Accessibility identifier (most reliable)"),
+                        "description": .string("Accessibility identifier (most reliable query method)"),
                     ]),
                     "label": .object([
                         "type": .string("string"),
@@ -120,7 +132,7 @@ enum SimPilotTools {
                     ]),
                     "text": .object([
                         "type": .string("string"),
-                        "description": .string("Visible text (OCR fallback)"),
+                        "description": .string("Visible text to find"),
                     ]),
                     "element_type": .object([
                         "type": .string("string"),
@@ -135,13 +147,25 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_type",
-            description: "Type text into a field. Taps the field first to focus it, then types.",
+            description: """
+                Type text. If x/y coordinates or a field query is provided, taps the field first.
+                If neither is provided, types into the currently focused field — use this after
+                tapping a field with simpilot_tap.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "text": .object([
                         "type": .string("string"),
                         "description": .string("Text to type"),
+                    ]),
+                    "x": .object([
+                        "type": .string("number"),
+                        "description": .string("X coordinate of the field to tap first (device points)"),
+                    ]),
+                    "y": .object([
+                        "type": .string("number"),
+                        "description": .string("Y coordinate of the field to tap first (device points)"),
                     ]),
                     "accessibility_id": .object([
                         "type": .string("string"),
@@ -157,25 +181,54 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_swipe",
-            description: "Swipe in a direction. Useful for scrolling.",
+            description: """
+                Swipe gesture. Use EITHER a direction (simple) OR from/to coordinates (precise).
+                Coordinates are in device points.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "direction": .object([
                         "type": .string("string"),
-                        "description": .string("Swipe direction: up, down, left, right"),
+                        "description": .string("Simple swipe direction: up, down, left, right"),
                         "enum": .array([.string("up"), .string("down"), .string("left"), .string("right")]),
                     ]),
+                    "from_x": .object([
+                        "type": .string("number"),
+                        "description": .string("Start X coordinate (device points)"),
+                    ]),
+                    "from_y": .object([
+                        "type": .string("number"),
+                        "description": .string("Start Y coordinate (device points)"),
+                    ]),
+                    "to_x": .object([
+                        "type": .string("number"),
+                        "description": .string("End X coordinate (device points)"),
+                    ]),
+                    "to_y": .object([
+                        "type": .string("number"),
+                        "description": .string("End Y coordinate (device points)"),
+                    ]),
                 ]),
-                "required": .array([.string("direction")]),
             ])
         ),
         Tool(
             name: "simpilot_long_press",
-            description: "Long press on a UI element.",
+            description: """
+                Long press on a UI element or at coordinates.
+                Use EITHER coordinates (x/y) OR a query (accessibility_id/label/text).
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
+                    "x": .object([
+                        "type": .string("number"),
+                        "description": .string("X coordinate in device points"),
+                    ]),
+                    "y": .object([
+                        "type": .string("number"),
+                        "description": .string("Y coordinate in device points"),
+                    ]),
                     "accessibility_id": .object([
                         "type": .string("string"),
                         "description": .string("Accessibility identifier"),
@@ -510,6 +563,40 @@ enum SimPilotTools {
             ])
         ),
     ]
+
+    // MARK: Keyboard
+
+    static let keyboard: [Tool] = [
+        Tool(
+            name: "simpilot_press_key",
+            description: """
+                Press a keyboard key. Useful for dismissing keyboards (escape), submitting forms (return),
+                navigating between fields (tab), or deleting text (delete).
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "key": .object([
+                        "type": .string("string"),
+                        "description": .string("Key to press"),
+                        "enum": .array([
+                            .string("return"), .string("delete"), .string("tab"),
+                            .string("escape"), .string("space"),
+                        ]),
+                    ]),
+                ]),
+                "required": .array([.string("key")]),
+            ])
+        ),
+        Tool(
+            name: "simpilot_dismiss_keyboard",
+            description: "Dismiss the on-screen keyboard by pressing Escape.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([:]),
+            ])
+        ),
+    ]
 }
 
 // MARK: - Value Helpers
@@ -636,6 +723,9 @@ actor SimPilotMCPServer {
             // Session
             "simpilot_session_start": { try await self.handleSessionStart($0) },
             "simpilot_session_end": { _ in try await self.handleSessionEnd() },
+            // Keyboard
+            "simpilot_press_key": { try await self.handlePressKey($0) },
+            "simpilot_dismiss_keyboard": { _ in try await self.handleDismissKeyboard() },
         ]
     }
 
@@ -754,7 +844,22 @@ actor SimPilotMCPServer {
 
     private func handleTap(_ args: [String: Value]) async throws -> CallTool.Result {
         let session = try await requireSession()
+
+        // Coordinate-based tap (always works, no element lookup)
+        if let x = args["x"]?.numericValue, let y = args["y"]?.numericValue {
+            try await session.tap(x: x, y: y)
+            return CallTool.Result(content: [.text("Tapped at (\(x), \(y))")])
+        }
+
+        // Query-based tap (requires accessibility data)
         let query = buildQuery(from: args)
+        guard query.accessibilityID != nil || query.label != nil
+                || query.text != nil || query.elementType != nil else {
+            return CallTool.Result(
+                content: [.text("Provide either x/y coordinates or a query (accessibility_id, label, text, element_type)")],
+                isError: true
+            )
+        }
         try await session.tap(query)
         return CallTool.Result(content: [.text("Tapped element matching: \(query.description)")])
     }
@@ -764,46 +869,75 @@ actor SimPilotMCPServer {
             return CallTool.Result(content: [.text("Missing required parameter: text")], isError: true)
         }
         let session = try await requireSession()
+
+        // If coordinates provided, tap the field first then type
+        if let x = args["x"]?.numericValue, let y = args["y"]?.numericValue {
+            try await session.tap(x: x, y: y)
+            try await Task.sleep(for: .milliseconds(200))
+            try await session.typeText(text)
+            return CallTool.Result(content: [.text("Tapped (\(x), \(y)) and typed '\(text)'")])
+        }
+
+        // If query provided, find the field first
         let query = ElementQuery(
             accessibilityID: args["accessibility_id"]?.stringValue,
             label: args["label"]?.stringValue
         )
         if query.accessibilityID != nil || query.label != nil {
             try await session.type(into: query, text: text)
-        } else {
-            // Type into currently focused field — just tap and type via the session's interaction driver
-            try await session.type(into: ElementQuery(elementType: .textField, index: 0), text: text)
+            return CallTool.Result(content: [.text("Typed '\(text)' into \(query.description)")])
         }
-        return CallTool.Result(content: [.text("Typed '\(text)'")])
+
+        // No coordinates or query — type into whatever is currently focused
+        try await session.typeText(text)
+        return CallTool.Result(content: [.text("Typed '\(text)' into focused field")])
     }
 
     private func handleSwipe(_ args: [String: Value]) async throws -> CallTool.Result {
+        let session = try await requireSession()
+
+        // Coordinate-based swipe
+        if let fromX = args["from_x"]?.numericValue,
+           let fromY = args["from_y"]?.numericValue,
+           let toX = args["to_x"]?.numericValue,
+           let toY = args["to_y"]?.numericValue {
+            try await session.swipe(fromX: fromX, fromY: fromY, toX: toX, toY: toY)
+            return CallTool.Result(content: [.text("Swiped from (\(fromX), \(fromY)) to (\(toX), \(toY))")])
+        }
+
+        // Direction-based swipe
         guard let dirStr = args["direction"]?.stringValue,
               let direction = SwipeDirection(rawValue: dirStr) else {
-            return CallTool.Result(content: [.text("Missing or invalid parameter: direction (up/down/left/right)")], isError: true)
+            return CallTool.Result(
+                content: [.text("Provide either direction or from_x/from_y/to_x/to_y coordinates")],
+                isError: true
+            )
         }
-        let session = try await requireSession()
         try await session.swipe(direction)
         return CallTool.Result(content: [.text("Swiped \(dirStr)")])
     }
 
     private func handleLongPress(_ args: [String: Value]) async throws -> CallTool.Result {
         let session = try await requireSession()
-        let query = buildQuery(from: args)
-        // Long press requires resolving the element then using the interaction driver
-        // Session doesn't expose longPress directly, so resolve + call driver
-        let tree = try await session.getTree()
-        guard findInTree(tree.root, query: query) != nil else {
-            throw SimPilotError.elementNotFound(query)
-        }
-        // We can't directly access the interaction driver from session,
-        // so we approximate by tapping (tap includes finding).
-        // For a proper long press, use the session's underlying capabilities.
-        // Fallback: just tap for now and note it in output.
-        try await session.tap(query)
         let duration = args["duration"]?.numericValue ?? 1.0
-        _ = duration // Duration is used by the interaction driver directly
-        return CallTool.Result(content: [.text("Long pressed element matching: \(query.description)")])
+
+        // Coordinate-based long press
+        if let x = args["x"]?.numericValue, let y = args["y"]?.numericValue {
+            try await session.longPress(x: x, y: y, duration: duration)
+            return CallTool.Result(content: [.text("Long pressed at (\(x), \(y)) for \(duration)s")])
+        }
+
+        // Query-based long press
+        let query = buildQuery(from: args)
+        guard query.accessibilityID != nil || query.label != nil
+                || query.text != nil || query.elementType != nil else {
+            return CallTool.Result(
+                content: [.text("Provide either x/y coordinates or a query (accessibility_id, label, text)")],
+                isError: true
+            )
+        }
+        try await session.longPress(query, duration: duration)
+        return CallTool.Result(content: [.text("Long pressed element matching: \(query.description) for \(duration)s")])
     }
 
     private func handlePressButton(_ args: [String: Value]) async throws -> CallTool.Result {
@@ -854,9 +988,13 @@ actor SimPilotMCPServer {
         let summaries = matches.map { el in
             let idStr = el.id.map { "\"\($0)\"" } ?? "null"
             let labelStr = el.label.map { "\"\($0)\"" } ?? "null"
+            let valueStr = el.value.map { "\"\($0)\"" } ?? "null"
             let f = el.frame
-            return "{\"id\":\(idStr),\"label\":\(labelStr),"
+            let cx = f.origin.x + f.size.width / 2
+            let cy = f.origin.y + f.size.height / 2
+            return "{\"id\":\(idStr),\"label\":\(labelStr),\"value\":\(valueStr),"
                 + "\"type\":\"\(el.elementType.rawValue)\","
+                + "\"center\":{\"x\":\(cx),\"y\":\(cy)},"
                 + "\"frame\":{\"x\":\(f.origin.x),\"y\":\(f.origin.y),"
                 + "\"width\":\(f.size.width),\"height\":\(f.size.height)}}"
         }
@@ -991,6 +1129,35 @@ actor SimPilotMCPServer {
         )
         try await getSimctlDriver().setStatusBar(udid: device.udid, overrides: overrides)
         return CallTool.Result(content: [.text("Status bar updated.")])
+    }
+
+    // MARK: - Keyboard Handlers
+
+    private static let keyNameMap: [String: KeyboardKey] = [
+        "return": .returnKey,
+        "delete": .delete,
+        "tab": .tab,
+        "escape": .escape,
+        "space": .space,
+    ]
+
+    private func handlePressKey(_ args: [String: Value]) async throws -> CallTool.Result {
+        guard let keyStr = args["key"]?.stringValue,
+              let key = Self.keyNameMap[keyStr] else {
+            return CallTool.Result(
+                content: [.text("Missing or invalid parameter: key (return, delete, tab, escape, space)")],
+                isError: true
+            )
+        }
+        let session = try await requireSession()
+        try await session.pressKey(key)
+        return CallTool.Result(content: [.text("Pressed key: \(keyStr)")])
+    }
+
+    private func handleDismissKeyboard() async throws -> CallTool.Result {
+        let session = try await requireSession()
+        try await session.dismissKeyboard()
+        return CallTool.Result(content: [.text("Keyboard dismissed")])
     }
 
     // MARK: - Session Handlers

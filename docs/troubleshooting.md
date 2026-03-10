@@ -151,11 +151,12 @@ simpilot screenshot debug.png  # Take a screenshot
 
 ### Tap hits the wrong element
 
-**Cause:** Coordinate mapping between the accessibility tree and the simulator window.
-
-1. Verify the element's frame:
+1. **Use coordinate-based tapping** — If element queries aren't finding the right target, use `simpilot_find_elements` to get coordinates, then tap by `x`/`y`:
    ```bash
+   # Find elements first
    simpilot tree --format json | grep -A5 "loginButton"
+   # Tap by coordinates from the element's center
+   simpilot tap --x 200 --y 400
    ```
 
 2. Ensure the simulator window is not scaled. Use **Window > Physical Size** in Simulator.app.
@@ -164,16 +165,35 @@ simpilot screenshot debug.png  # Take a screenshot
 
 ### Type not working
 
-1. **No focused field:** Type requires a focused text field. Tap the field first:
+1. **No focused field:** Tap the field first, then type without a query:
    ```bash
-   simpilot tap --id emailField
-   simpilot type --text "hello@test.com"
+   simpilot tap --x 200 --y 400      # Tap the field by coordinates
+   simpilot type --text "hello@test.com"  # Types into focused field
    ```
 
-2. **Hardware keyboard connected:** If the iOS simulator's software keyboard is hidden because "Connect Hardware Keyboard" is enabled, typing via accessibility still works but may behave differently.
+2. **SwiftUI TextFields have no accessibility labels:** Use coordinates instead:
+   ```bash
+   # Find the field coordinates
+   simpilot tree --format json | grep -B2 -A5 "textField"
+   # Tap and type using coordinates
+   simpilot type --text "hello@test.com" --x 200 --y 400
+   ```
+
+3. **Hardware keyboard connected:** If the iOS simulator's software keyboard is hidden because "Connect Hardware Keyboard" is enabled, typing via accessibility still works but may behave differently.
    - In Simulator: **I/O > Keyboard > Connect Hardware Keyboard** (toggle off)
 
-3. **Secure text field:** Password fields work the same way but won't show the typed text in the accessibility value.
+4. **Secure text field:** Password fields work the same way but won't show the typed text in the accessibility value.
+
+### System sheet blocking interaction (e.g. "Use Strong Password?")
+
+iOS may show system sheets like password suggestions that block app interaction. Dismiss them:
+
+```bash
+simpilot press-key --key escape    # Dismiss most system sheets
+simpilot dismiss-keyboard          # Dismiss keyboard and overlays
+```
+
+If escape doesn't work, try tapping outside the sheet using coordinates.
 
 ### Swipe doesn't scroll
 
