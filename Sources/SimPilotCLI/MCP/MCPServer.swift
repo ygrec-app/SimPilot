@@ -870,15 +870,15 @@ actor SimPilotMCPServer {
         }
         let session = try await requireSession()
 
-        // If coordinates provided, tap the field first then type
+        // If coordinates provided, tap the field first then type via pasteboard
         if let x = args["x"]?.numericValue, let y = args["y"]?.numericValue {
             try await session.tap(x: x, y: y)
-            try await Task.sleep(for: .milliseconds(200))
-            try await session.typeText(text)
+            try await Task.sleep(for: .milliseconds(300))
+            try await session.typeTextViaPasteboard(text)
             return CallTool.Result(content: [.text("Tapped (\(x), \(y)) and typed '\(text)'")])
         }
 
-        // If query provided, find the field first
+        // If query provided, find the field and tap it, then paste
         let query = ElementQuery(
             accessibilityID: args["accessibility_id"]?.stringValue,
             label: args["label"]?.stringValue
@@ -888,8 +888,8 @@ actor SimPilotMCPServer {
             return CallTool.Result(content: [.text("Typed '\(text)' into \(query.description)")])
         }
 
-        // No coordinates or query — type into whatever is currently focused
-        try await session.typeText(text)
+        // No coordinates or query — type into whatever is currently focused via pasteboard
+        try await session.typeTextViaPasteboard(text)
         return CallTool.Result(content: [.text("Typed '\(text)' into focused field")])
     }
 

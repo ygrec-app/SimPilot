@@ -160,8 +160,20 @@ Element resolution follows a progressive fallback chain: Accessibility ID -> Lab
 - **macOS 14+** (Sonoma or later)
 - **Xcode 15+** with an iOS Simulator runtime installed
 - **Accessibility permission** granted to your terminal app (Terminal, iTerm2, VS Code, etc.)
+- **Simulator window must be visible on screen** (see below)
 
 On first run, SimPilot checks for accessibility permission and opens System Settings to the correct pane if it is missing.
+
+### Simulator Window Visibility
+
+SimPilot uses CGEvent APIs to inject touch and keyboard input into the Simulator by posting mouse/key events at screen coordinates. **The Simulator window must be visible on the same screen** — it cannot be minimized, on a hidden macOS Space, or fully covered by fullscreen apps.
+
+Recommended setup:
+- Place your terminal (Claude Code, VS Code, etc.) and the Simulator side by side on the same Space
+- A second monitor works — Simulator on one display, your editor on the other
+- Do **not** minimize the Simulator or move it to a different Space while automation is running
+
+> **Note:** Screenshots (`simpilot_screenshot`) use `simctl` and work regardless of window visibility. Only touch/keyboard interactions require the Simulator to be on-screen.
 
 ---
 
@@ -185,7 +197,7 @@ On first run, SimPilot checks for accessibility permission and opens System Sett
 | CLI framework | Swift Argument Parser |
 | MCP SDK | [swift-sdk](https://github.com/modelcontextprotocol/swift-sdk) |
 | Simulator control | `xcrun simctl` |
-| Touch / keyboard | HID event injection (IOKit) |
+| Touch / keyboard | HID event injection (CGEvent) + simctl pasteboard |
 | Accessibility tree | AXUIElement (ApplicationServices) |
 | OCR | Vision framework (VNRecognizeTextRequest) |
 | Distribution | Homebrew tap |

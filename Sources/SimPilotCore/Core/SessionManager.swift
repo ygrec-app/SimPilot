@@ -69,6 +69,19 @@ public actor Session {
         actionCount += 1
     }
 
+    /// Type text via the simulator pasteboard (simctl pbcopy + paste).
+    /// More reliable than keystroke injection when Simulator doesn't have keyboard focus.
+    public func typeTextViaPasteboard(_ text: String) async throws {
+        guard let hid = interactionDriver as? HIDDriver else {
+            // Fallback to regular typing for non-HID drivers (e.g., mocks)
+            try await interactionDriver.typeText(text)
+            actionCount += 1
+            return
+        }
+        try await hid.typeTextViaPasteboard(text)
+        actionCount += 1
+    }
+
     public func type(accessibilityID id: String, text: String) async throws {
         try await type(into: .byID(id), text: text)
     }

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`simpilot_press_key`** — Press keyboard keys: return, delete, tab, escape, space. Useful for form navigation and dismissing system sheets.
 - **`simpilot_dismiss_keyboard`** — Convenience tool to dismiss the on-screen keyboard.
 - **`simpilot_find_elements` improvements** — Response now includes `center` coordinates and `value` field, so coordinates can be used directly with `simpilot_tap`.
+- **Simulator auto-activation** — HIDDriver now activates the Simulator app before posting keyboard events, preventing keystrokes from landing in the wrong application (e.g., the terminal running Claude Code).
+- **Pasteboard-based typing** — New `typeTextViaPasteboard` method uses `simctl pbcopy` + Cmd+V paste. The MCP `simpilot_type` handler uses this by default for reliable text input regardless of which app has keyboard focus.
 
 ## [1.0.0] - 2026-03-09
 

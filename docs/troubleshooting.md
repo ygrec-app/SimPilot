@@ -149,6 +149,22 @@ simpilot screenshot debug.png  # Take a screenshot
 
 ## Interaction Issues
 
+### Taps, typing, and swipes do nothing
+
+**Cause:** The Simulator window is not visible on screen.
+
+SimPilot injects touch and keyboard input via CGEvent APIs, which post mouse and key events at macOS screen coordinates. This only works when the Simulator window is **visible on the current Space**.
+
+**Checklist:**
+- Simulator window is **not minimized**
+- Simulator is on the **same macOS Space** as your terminal (or on a visible second monitor)
+- Simulator is **not behind a fullscreen app**
+- No other app named "Simulator" is confusing the window lookup
+
+**Fix:** Place your terminal and the Simulator side by side on the same Space. If using multiple displays, either screen works — the window just needs to be on-screen.
+
+> Screenshots (`simpilot_screenshot`) are unaffected — they use `simctl` and work regardless of window visibility.
+
 ### Tap hits the wrong element
 
 1. **Use coordinate-based tapping** — If element queries aren't finding the right target, use `simpilot_find_elements` to get coordinates, then tap by `x`/`y`:
@@ -179,10 +195,12 @@ simpilot screenshot debug.png  # Take a screenshot
    simpilot type --text "hello@test.com" --x 200 --y 400
    ```
 
-3. **Hardware keyboard connected:** If the iOS simulator's software keyboard is hidden because "Connect Hardware Keyboard" is enabled, typing via accessibility still works but may behave differently.
+3. **Text goes to the wrong app (terminal/editor instead of Simulator):** SimPilot now auto-activates the Simulator before keyboard input and uses pasteboard-based typing (`simctl pbcopy` + paste) by default via MCP. If you still see this issue, ensure the Simulator window is visible on screen (see "Taps, typing, and swipes do nothing" above).
+
+4. **Hardware keyboard connected:** If the iOS simulator's software keyboard is hidden because "Connect Hardware Keyboard" is enabled, typing via accessibility still works but may behave differently.
    - In Simulator: **I/O > Keyboard > Connect Hardware Keyboard** (toggle off)
 
-4. **Secure text field:** Password fields work the same way but won't show the typed text in the accessibility value.
+5. **Secure text field:** Password fields work the same way but won't show the typed text in the accessibility value.
 
 ### System sheet blocking interaction (e.g. "Use Strong Password?")
 

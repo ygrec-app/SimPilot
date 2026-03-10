@@ -62,10 +62,48 @@ public actor HIDDriver: InteractionDriverProtocol {
     }
 
     public func typeText(_ text: String) async throws {
+        try await activateSimulator()
         for character in text {
             try postKeyboardEvent(for: character)
             try await Task.sleep(for: .milliseconds(30))
         }
+    }
+
+    /// Type text by copying it to the simulator pasteboard via simctl, then pasting.
+    /// More reliable than CGEvent keyboard injection because it doesn't depend on
+    /// the Simulator having keyboard focus — only the paste keystroke needs focus.
+    public func typeTextViaPasteboard(_ text: String) async throws {
+        // Copy text to the simulator's pasteboard
+        let pbProcess = Process()
+        pbProcess.executableURL = URL(filePath: "/usr/bin/xcrun")
+        pbProcess.arguments = ["simctl", "pbcopy", udid]
+        let inputPipe = Pipe()
+        pbProcess.standardInput = inputPipe
+        pbProcess.standardOutput = FileHandle.nullDevice
+        pbProcess.standardError = FileHandle.nullDevice
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            pbProcess.terminationHandler = { process in
+                if process.terminationStatus != 0 {
+                    continuation.resume(throwing: SimPilotError.interactionFailed(
+                        "simctl pbcopy failed with exit code \(process.terminationStatus)"
+                    ))
+                } else {
+                    continuation.resume()
+                }
+            }
+            do {
+                try pbProcess.run()
+                inputPipe.fileHandleForWriting.write(text.data(using: .utf8) ?? Data())
+                inputPipe.fileHandleForWriting.closeFile()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+
+        // Activate Simulator and paste with Cmd+V
+        try await activateSimulator()
+        try postKeyPress(keyCode: 0x09, flags: .maskCommand) // 'v' key
     }
 
     public func pressButton(_ button: HardwareButton) async throws {
@@ -73,8 +111,27 @@ public actor HIDDriver: InteractionDriverProtocol {
     }
 
     public func pressKey(_ key: KeyboardKey) async throws {
+        try await activateSimulator()
         let keyCode = cgKeyCode(for: key)
         try postKeyPress(keyCode: keyCode, flags: keyFlags(for: key))
+    }
+
+    // MARK: - App Activation
+
+    /// Bring the Simulator app to the foreground so it receives keyboard events.
+    /// CGEvent mouse clicks route to the window under the cursor, but keyboard events
+    /// go to the frontmost (key) application. Without activation, keystrokes land in
+    /// whichever app was previously focused (e.g., the terminal running Claude Code).
+    private func activateSimulator() async throws {
+        let runningApps = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.apple.iphonesimulator"
+        )
+        guard let simApp = runningApps.first else {
+            throw SimPilotError.simulatorNotFound("Simulator.app is not running")
+        }
+        simApp.activate()
+        // Brief wait for activation to take effect
+        try await Task.sleep(for: .milliseconds(50))
     }
 
     // MARK: - Coordinate Conversion
