@@ -66,27 +66,35 @@ public actor PermissionDriver: PermissionDriverProtocol {
         process.standardOutput = stdout
         process.standardError = stderr
 
-        do {
-            try process.run()
-        } catch {
-            throw SimPilotError.permissionFailed(
-                "applesimutils not found at \(executablePath). Install via: brew install applesimutils"
-            )
+        let stdoutReader = Task.detached { stdout.fileHandleForReading.readDataToEndOfFile() }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { _ in
+                Task.detached {
+                    let stdoutData = await stdoutReader.value
+                    if process.terminationStatus != 0 {
+                        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+                        let errorString = String(data: errorData, encoding: .utf8) ?? ""
+                        continuation.resume(throwing: SimPilotError.processError(
+                            command: "applesimutils \(args.joined(separator: " "))",
+                            exitCode: process.terminationStatus,
+                            stderr: errorString
+                        ))
+                    } else {
+                        continuation.resume(returning: stdoutData)
+                    }
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                stdoutReader.cancel()
+                continuation.resume(throwing: SimPilotError.permissionFailed(
+                    "applesimutils not found at \(self.executablePath). Install via: brew install applesimutils"
+                ))
+            }
         }
-
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? ""
-            throw SimPilotError.processError(
-                command: "applesimutils \(args.joined(separator: " "))",
-                exitCode: process.terminationStatus,
-                stderr: errorString
-            )
-        }
-
-        return stdout.fileHandleForReading.readDataToEndOfFile()
     }
 
     @discardableResult
@@ -100,19 +108,32 @@ public actor PermissionDriver: PermissionDriverProtocol {
         process.standardOutput = stdout
         process.standardError = stderr
 
-        try process.run()
-        process.waitUntilExit()
+        let stdoutReader = Task.detached { stdout.fileHandleForReading.readDataToEndOfFile() }
 
-        guard process.terminationStatus == 0 else {
-            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? ""
-            throw SimPilotError.processError(
-                command: "simctl \(args.joined(separator: " "))",
-                exitCode: process.terminationStatus,
-                stderr: errorString
-            )
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { _ in
+                Task.detached {
+                    let stdoutData = await stdoutReader.value
+                    if process.terminationStatus != 0 {
+                        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+                        let errorString = String(data: errorData, encoding: .utf8) ?? ""
+                        continuation.resume(throwing: SimPilotError.processError(
+                            command: "simctl \(args.joined(separator: " "))",
+                            exitCode: process.terminationStatus,
+                            stderr: errorString
+                        ))
+                    } else {
+                        continuation.resume(returning: stdoutData)
+                    }
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                stdoutReader.cancel()
+                continuation.resume(throwing: error)
+            }
         }
-
-        return stdout.fileHandleForReading.readDataToEndOfFile()
     }
 }

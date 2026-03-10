@@ -15,20 +15,37 @@ actor CLISimctlDriver: SimulatorDriverProtocol {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? ""
-            throw SimPilotError.processError(
-                command: "simctl \(args.joined(separator: " "))",
-                exitCode: process.terminationStatus,
-                stderr: errorString
-            )
+        // Read stdout on a background thread to drain the pipe buffer concurrently,
+        // preventing stalls on large output (e.g. screenshot PNG data).
+        let stdoutReader = Task.detached {
+            stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         }
 
-        return stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { _ in
+                Task.detached {
+                    let stdoutData = await stdoutReader.value
+                    if process.terminationStatus != 0 {
+                        let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                        let errorString = String(data: errorData, encoding: .utf8) ?? ""
+                        continuation.resume(throwing: SimPilotError.processError(
+                            command: "simctl \(args.joined(separator: " "))",
+                            exitCode: process.terminationStatus,
+                            stderr: errorString
+                        ))
+                    } else {
+                        continuation.resume(returning: stdoutData)
+                    }
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                stdoutReader.cancel()
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     private func executeDiscarding(_ args: [String]) async throws {

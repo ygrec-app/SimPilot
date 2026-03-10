@@ -353,17 +353,26 @@ public actor HIDDriver: InteractionDriverProtocol {
         process.standardError = stderrPipe
         process.standardOutput = FileHandle.nullDevice
 
-        try process.run()
-        process.waitUntilExit()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            process.terminationHandler = { _ in
+                if process.terminationStatus != 0 {
+                    let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    let errorString = String(data: errorData, encoding: .utf8) ?? ""
+                    continuation.resume(throwing: SimPilotError.processError(
+                        command: "simctl \(args.joined(separator: " "))",
+                        exitCode: process.terminationStatus,
+                        stderr: errorString
+                    ))
+                } else {
+                    continuation.resume()
+                }
+            }
 
-        guard process.terminationStatus == 0 else {
-            let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? ""
-            throw SimPilotError.processError(
-                command: "simctl \(args.joined(separator: " "))",
-                exitCode: process.terminationStatus,
-                stderr: errorString
-            )
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
         }
     }
 }

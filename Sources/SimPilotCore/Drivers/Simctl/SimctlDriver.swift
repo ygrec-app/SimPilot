@@ -6,6 +6,8 @@ public actor SimctlDriver: SimulatorDriverProtocol {
     // MARK: - Private Helpers
 
     /// Execute a simctl command and return stdout data.
+    /// Uses async continuation + terminationHandler to avoid blocking the cooperative thread pool.
+    /// Reads stdout on a detached task to prevent pipe buffer stalls on large output.
     private func execute(_ args: [String]) async throws -> Data {
         let process = Process()
         process.executableURL = URL(filePath: "/usr/bin/xcrun")
@@ -16,20 +18,35 @@ public actor SimctlDriver: SimulatorDriverProtocol {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorString = String(data: errorData, encoding: .utf8) ?? ""
-            throw SimPilotError.processError(
-                command: "simctl \(args.joined(separator: " "))",
-                exitCode: process.terminationStatus,
-                stderr: errorString
-            )
+        let stdoutReader = Task.detached {
+            stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         }
 
-        return stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { _ in
+                Task.detached {
+                    let stdoutData = await stdoutReader.value
+                    if process.terminationStatus != 0 {
+                        let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                        let errorString = String(data: errorData, encoding: .utf8) ?? ""
+                        continuation.resume(throwing: SimPilotError.processError(
+                            command: "simctl \(args.joined(separator: " "))",
+                            exitCode: process.terminationStatus,
+                            stderr: errorString
+                        ))
+                    } else {
+                        continuation.resume(returning: stdoutData)
+                    }
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                stdoutReader.cancel()
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     /// Execute a simctl command, discarding stdout.
