@@ -1284,24 +1284,62 @@ actor SimPilotMCPServer {
         "Action", "Volume Up", "Volume Down", "Sleep/Wake",
     ]
 
-    /// Filter out Simulator device chrome (hardware button overlays, toolbar,
-    /// status bar elements) to reduce noise in tree output.
+    /// Filter out Simulator device chrome and off-screen elements
+    /// to reduce noise in tree/find_elements output.
     private func filterDeviceChrome(_ element: Element) -> Element {
+        // Determine viewport bounds from the window element.
+        // The Simulator window child has the device dimensions.
+        let viewport = findViewport(element)
+        return filterElement(element, viewport: viewport)
+    }
+
+    /// Find the visible viewport rect from the tree structure.
+    /// Falls back to a conservative default if not determinable.
+    private func findViewport(_ root: Element) -> CGRect {
+        // Look for the window-level element (largest child)
+        for child in root.children {
+            if child.frame.width > 200 && child.frame.height > 200 {
+                return child.frame
+            }
+            // Recurse one level for nested window structure
+            for grandchild in child.children {
+                if grandchild.frame.width > 200
+                    && grandchild.frame.height > 200 {
+                    return grandchild.frame
+                }
+            }
+        }
+        // Conservative default: don't filter by viewport
+        return CGRect(
+            x: -10000, y: -10000,
+            width: 20000, height: 20000
+        )
+    }
+
+    private func filterElement(
+        _ element: Element,
+        viewport: CGRect
+    ) -> Element {
         let filtered = element.children.compactMap { child -> Element? in
             // Remove device chrome buttons (hardware button overlays)
             if let label = child.label,
                Self.deviceChromeLabels.contains(label) {
                 return nil
             }
-            // Remove small chrome elements whose center is above
-            // the screen (toolbar buttons, title bar text).
-            // The main window also has origin.y < 0 (title bar)
-            // but its center is well within the screen (~y=499).
+            // Remove elements whose center is above the screen
+            // (toolbar buttons, title bar text).
             let centerY = child.frame.midY
             if centerY < 0 {
                 return nil
             }
-            return filterDeviceChrome(child)
+            // Remove off-screen elements (e.g. calendar cells
+            // for previous/next months in a paging scroll view).
+            let centerX = child.frame.midX
+            if centerX < viewport.minX
+                || centerX > viewport.maxX {
+                return nil
+            }
+            return filterElement(child, viewport: viewport)
         }
         return Element(
             id: element.id,
