@@ -1300,11 +1300,6 @@ actor SimPilotMCPServer {
             if child.frame.origin.y < 0 {
                 return nil
             }
-            // Remove Simulator window frame label
-            if let label = child.label,
-               label.contains("–") && label.contains("iOS") {
-                return nil
-            }
             return filterDeviceChrome(child)
         }
         return Element(
