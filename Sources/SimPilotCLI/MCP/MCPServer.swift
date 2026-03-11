@@ -1293,11 +1293,12 @@ actor SimPilotMCPServer {
                Self.deviceChromeLabels.contains(label) {
                 return nil
             }
-            // Remove elements starting above the screen (toolbar,
-            // close/minimize/zoom buttons, title bar text).
-            // These have origin.y < 0 even if they extend into
-            // visible area (e.g. toolbar at y=-28, height=52).
-            if child.frame.origin.y < 0 {
+            // Remove small chrome elements whose center is above
+            // the screen (toolbar buttons, title bar text).
+            // The main window also has origin.y < 0 (title bar)
+            // but its center is well within the screen (~y=499).
+            let centerY = child.frame.midY
+            if centerY < 0 {
                 return nil
             }
             return filterDeviceChrome(child)
