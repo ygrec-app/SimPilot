@@ -39,7 +39,13 @@ Add to your project-level `.mcp.json` (or `~/.claude/claude_desktop_config.json`
 
 Replace `/path/to/SimPilot` with the actual path where you cloned the repo. If you added `simpilot` to your `PATH` (see symlink step above), you can use just `"simpilot"` as the command.
 
+**Recommended:** Pair SimPilot with Apple's [Xcode MCP server](https://developer.apple.com/documentation/Xcode/giving-agentic-coding-tools-access-to-xcode) for the best experience. Xcode MCP lets agents build your project, read diagnostics, and run tests — SimPilot handles everything on the simulator side. Together they enable a full "build, launch, and test" workflow from a single prompt.
+
+Without Xcode MCP, SimPilot still works — it will auto-detect and launch the most recent build from DerivedData — but the agent won't be able to trigger fresh builds.
+
 Then ask Claude: "Launch my app and test the login flow."
+
+> **Zero-config launch:** `simpilot_launch_app` auto-detects the most recently built `.app` from Xcode's DerivedData — no `bundle_id` or `app_path` needed. It also picks an available iPhone simulator automatically if no `device_name` is provided. Just build your project in Xcode (or let Xcode MCP do it) and SimPilot handles the rest.
 
 ### Use from CLI
 

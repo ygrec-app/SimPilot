@@ -5,6 +5,18 @@ All notable changes to SimPilot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-11
+
+### Fixed
+
+- **Launch pipe deadlock** — Replaced `--console-pty` + `Pipe`-based stdout capture in `SimctlDriver.launch()` with a temp-file approach, fixing hangs caused by pipe deadlocks under actor isolation.
+
+### Added
+
+- **Zero-config app launch** — `simpilot_launch_app` auto-detects the most recently built `.app` from Xcode's DerivedData when `bundle_id` is omitted. No parameters required for the common case.
+- **Auto device selection** — `device_name` is now optional across `simpilot_launch_app` and `simpilot_session_start`. SimPilot picks an already-booted iPhone, or the first available one.
+- **Simulator GUI auto-open** — Booting a device or launching an app now opens the Simulator.app window automatically.
+
 ## [1.1.0] - 2026-03-10
 
 ### Fixed

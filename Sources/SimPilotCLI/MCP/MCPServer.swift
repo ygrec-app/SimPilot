@@ -50,24 +50,23 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_launch_app",
-            description: "Launch an app on the booted simulator. Boots the device if needed.",
+            description: "Launch an app on the booted simulator. Boots the device if needed. If bundle_id is omitted, auto-detects from the most recently built .app in Xcode DerivedData.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "bundle_id": .object([
                         "type": .string("string"),
-                        "description": .string("App bundle identifier"),
+                        "description": .string("App bundle identifier. Optional — auto-detected from DerivedData if omitted."),
                     ]),
                     "device_name": .object([
                         "type": .string("string"),
-                        "description": .string("Simulator device name (default: 'iPhone 16 Pro')"),
+                        "description": .string("Simulator device name. Optional — defaults to a booted or available iPhone."),
                     ]),
                     "app_path": .object([
                         "type": .string("string"),
                         "description": .string("Path to .app bundle to install before launching"),
                     ]),
                 ]),
-                "required": .array([.string("bundle_id")]),
             ])
         ),
         Tool(
@@ -554,7 +553,7 @@ enum SimPilotTools {
                 "properties": .object([
                     "device_name": .object([
                         "type": .string("string"),
-                        "description": .string("Simulator device name (default: 'iPhone 16 Pro')"),
+                        "description": .string("Simulator device name. Optional — defaults to a booted or available iPhone."),
                     ]),
                     "bundle_id": .object([
                         "type": .string("string"),
@@ -656,11 +655,36 @@ actor SimPilotMCPServer {
         return manager
     }
 
+    /// Resolve device name: use provided value, or already-booted device, or first available iPhone.
+    private func resolveDeviceName(_ provided: String?) async throws -> String {
+        if let provided { return provided }
+        // Prefer already-booted device
+        if let booted = bootedDevice { return booted.name }
+        // Find first booted iPhone, or first available iPhone
+        let devices = try await getSimctlDriver().listDevices()
+        if let booted = devices.first(where: { $0.state == .booted && $0.name.contains("iPhone") }) {
+            return booted.name
+        }
+        if let iphone = devices.first(where: { $0.name.contains("iPhone") }) {
+            return iphone.name
+        }
+        return devices.first?.name ?? "iPhone 16 Pro"
+    }
+
     private func requireBootedDevice() throws -> DeviceInfo {
         guard let device = bootedDevice else {
             throw SimPilotError.simulatorNotBooted("No simulator booted. Use simpilot_boot or simpilot_session_start first.")
         }
         return device
+    }
+
+    /// Ensure the Simulator.app GUI is open for a specific device.
+    private func ensureSimulatorAppOpen(udid: String) {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/open")
+        process.arguments = ["-a", "Simulator", "--args", "-CurrentDeviceUDID", udid]
+        try? process.run()
+        process.waitUntilExit()
     }
 
     /// Return a booted device, auto-detecting one if not already tracked.
@@ -801,6 +825,7 @@ actor SimPilotMCPServer {
             return CallTool.Result(content: [.text("Missing required parameter: device_name")], isError: true)
         }
         let device = try await getSimulatorManager().boot(deviceName: deviceName)
+        ensureSimulatorAppOpen(udid: device.udid)
         bootedDevice = device
         return CallTool.Result(content: [
             .text("""
@@ -820,18 +845,74 @@ actor SimPilotMCPServer {
         return CallTool.Result(content: [.text("Simulator \(udid) shut down.")])
     }
 
-    private func handleLaunchApp(_ args: [String: Value]) async throws -> CallTool.Result {
-        guard let bundleID = args["bundle_id"]?.stringValue else {
-            return CallTool.Result(content: [.text("Missing required parameter: bundle_id")], isError: true)
+    /// Find the most recently built .app for the iOS Simulator in DerivedData.
+    private func findRecentSimulatorApp() -> (appPath: String, bundleID: String, appName: String, buildDate: Date)? {
+        let derivedData = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Developer/Xcode/DerivedData")
+        guard let projects = try? FileManager.default.contentsOfDirectory(
+            at: derivedData, includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return nil }
+
+        var bestApp: (path: URL, bundleID: String, date: Date)?
+
+        for project in projects {
+            let productsDir = project.appendingPathComponent("Build/Products")
+            guard let configs = try? FileManager.default.contentsOfDirectory(
+                at: productsDir, includingPropertiesForKeys: nil
+            ) else { continue }
+
+            for config in configs where config.lastPathComponent.hasSuffix("-iphonesimulator") {
+                guard let apps = try? FileManager.default.contentsOfDirectory(
+                    at: config, includingPropertiesForKeys: [.contentModificationDateKey]
+                ) else { continue }
+
+                for app in apps where app.pathExtension == "app" {
+                    let plist = app.appendingPathComponent("Info.plist")
+                    guard let data = try? Data(contentsOf: plist),
+                          let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+                          let bid = dict["CFBundleIdentifier"] as? String else { continue }
+
+                    let date = (try? app.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+                    if bestApp == nil || date > bestApp!.date {
+                        bestApp = (app, bid, date)
+                    }
+                }
+            }
         }
-        let deviceName = args["device_name"]?.stringValue ?? "iPhone 16 Pro"
-        let appPath = args["app_path"]?.stringValue
+
+        guard let best = bestApp else { return nil }
+        return (best.path.path, best.bundleID, best.path.lastPathComponent, best.date)
+    }
+
+    private func handleLaunchApp(_ args: [String: Value]) async throws -> CallTool.Result {
+        var bundleID = args["bundle_id"]?.stringValue
+        var appPath = args["app_path"]?.stringValue
+        let deviceName = try await resolveDeviceName(args["device_name"]?.stringValue)
+        var autoDetected = false
+        var detectedInfo = ""
+
+        // Auto-detect from DerivedData if bundle_id not provided
+        if bundleID == nil {
+            guard let detected = findRecentSimulatorApp() else {
+                return CallTool.Result(content: [.text("No bundle_id provided and could not auto-detect from DerivedData. Build the project in Xcode first, or provide bundle_id explicitly.")], isError: true)
+            }
+            bundleID = detected.bundleID
+            autoDetected = true
+            if appPath == nil {
+                appPath = detected.appPath
+            }
+            let age = Int(Date().timeIntervalSince(detected.buildDate))
+            let ageStr = age < 60 ? "\(age)s ago" : age < 3600 ? "\(age / 60)m ago" : "\(age / 3600)h ago"
+            detectedInfo = " (auto-detected: \(detected.appName), built \(ageStr))"
+        }
+
         let session = try await getSimulatorManager().launchApp(
-            deviceName: deviceName, appPath: appPath, bundleID: bundleID
+            deviceName: deviceName, appPath: appPath, bundleID: bundleID!
         )
+        ensureSimulatorAppOpen(udid: session.device.udid)
         bootedDevice = session.device
         return CallTool.Result(content: [
-            .text("App launched: \(bundleID) on \(session.device.name) (PID: \(session.pid))"),
+            .text("App launched: \(bundleID!) on \(session.device.name) (PID: \(session.pid))\(detectedInfo)"),
         ])
     }
 
@@ -1182,7 +1263,7 @@ actor SimPilotMCPServer {
             return CallTool.Result(content: [.text("A session is already active. End it first with simpilot_session_end.")], isError: true)
         }
 
-        let deviceName = args["device_name"]?.stringValue ?? "iPhone 16 Pro"
+        let deviceName = try await resolveDeviceName(args["device_name"]?.stringValue)
         let bundleID = args["bundle_id"]?.stringValue
         let appPath = args["app_path"]?.stringValue
 

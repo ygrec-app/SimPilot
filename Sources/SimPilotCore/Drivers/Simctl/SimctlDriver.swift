@@ -130,15 +130,47 @@ public actor SimctlDriver: SimulatorDriverProtocol {
     }
 
     public func launch(udid: String, bundleID: String, args: [String]) async throws -> Int {
-        let data = try await execute(["launch", "--console-pty", udid, bundleID] + args)
-        let output = String(data: data, encoding: .utf8) ?? ""
-        // simctl launch prints "<bundleID>: <pid>" to stdout
-        guard let pidString = output.split(separator: ":").last?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let pid = Int(pidString) else {
-            // Fallback: if we can't parse PID, return 0 indicating launch succeeded
-            return 0
+        // Use a temp file for stdout to avoid pipe deadlocks with actor isolation
+        let tmpFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent("simpilot-launch-\(UUID().uuidString).txt")
+
+        let shellArgs = (["simctl", "launch", udid, bundleID] + args)
+            .map { "'\($0)'" }
+            .joined(separator: " ")
+        let command = "/usr/bin/xcrun \(shellArgs) > '\(tmpFile.path)' 2>/dev/null"
+
+        let process = Process()
+        process.executableURL = URL(filePath: "/bin/sh")
+        process.arguments = ["-c", command]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { proc in
+                defer { try? FileManager.default.removeItem(at: tmpFile) }
+
+                guard proc.terminationStatus == 0 else {
+                    continuation.resume(throwing: SimPilotError.processError(
+                        command: "simctl launch \(bundleID)",
+                        exitCode: proc.terminationStatus,
+                        stderr: ""
+                    ))
+                    return
+                }
+
+                let output = (try? String(contentsOf: tmpFile, encoding: .utf8)) ?? ""
+                let pidString = output.split(separator: ":").last?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                continuation.resume(returning: pidString.flatMap(Int.init) ?? 0)
+            }
+
+            do {
+                try process.run()
+            } catch {
+                try? FileManager.default.removeItem(at: tmpFile)
+                continuation.resume(throwing: error)
+            }
         }
-        return pid
     }
 
     public func terminate(udid: String, bundleID: String) async throws {

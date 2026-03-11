@@ -37,8 +37,8 @@ simpilot run flows/*.yaml  # Run all flows
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Human-readable flow name (used in reports) |
-| `device` | No | Simulator device name (default: `iPhone 16 Pro`) |
-| `app.bundle_id` | Yes | App bundle identifier |
+| `device` | No | Simulator device name (auto-detects a booted or available iPhone if omitted) |
+| `app.bundle_id` | No | App bundle identifier (auto-detected from DerivedData if omitted) |
 | `app.path` | No | Path to `.app` bundle to install |
 | `setup` | No | Pre-test setup steps (permissions, etc.) |
 | `steps` | Yes | Ordered list of test steps |

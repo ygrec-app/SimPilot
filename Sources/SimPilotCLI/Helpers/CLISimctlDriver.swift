@@ -118,7 +118,7 @@ actor CLISimctlDriver: SimulatorDriverProtocol {
     }
 
     func launch(udid: String, bundleID: String, args: [String]) async throws -> Int {
-        let data = try await execute(["launch", "--console-pty", udid, bundleID] + args)
+        let data = try await execute(["launch", udid, bundleID] + args)
         let output = String(data: data, encoding: .utf8) ?? ""
         guard let pidString = output.split(separator: ":").last?.trimmingCharacters(in: .whitespacesAndNewlines),
               let pid = Int(pidString) else {
