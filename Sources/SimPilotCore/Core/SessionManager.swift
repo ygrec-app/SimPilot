@@ -59,7 +59,7 @@ public actor Session {
         let resolved = try await resolveElement(query)
         try await interactionDriver.tap(point: resolved.element.center)
         try await Task.sleep(for: .milliseconds(200))
-        try await interactionDriver.typeText(text)
+        try await interactionDriver.typeTextViaPasteboard(text)
         actionCount += 1
     }
 

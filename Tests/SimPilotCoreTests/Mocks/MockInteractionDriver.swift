@@ -14,6 +14,7 @@ public actor MockInteractionDriver: InteractionDriverProtocol {
         case longPress(CGPoint, TimeInterval)
         case swipe(from: CGPoint, to: CGPoint, duration: TimeInterval)
         case typeText(String)
+        case typeTextViaPasteboard(String)
         case pressButton(HardwareButton)
         case pressKey(KeyboardKey)
     }
@@ -66,6 +67,11 @@ public actor MockInteractionDriver: InteractionDriverProtocol {
 
     public func typeText(_ text: String) async throws {
         calls.append(.typeText(text))
+        if let error = typeTextError { throw error }
+    }
+
+    public func typeTextViaPasteboard(_ text: String) async throws {
+        calls.append(.typeTextViaPasteboard(text))
         if let error = typeTextError { throw error }
     }
 

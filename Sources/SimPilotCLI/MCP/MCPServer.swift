@@ -287,7 +287,7 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_get_tree",
-            description: "Get the full accessibility element tree as JSON. Useful for understanding the current UI structure.",
+            description: "Get the accessibility element tree as JSON. Device chrome (hardware buttons, status bar) is excluded. Use max_depth to limit size.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -301,13 +301,13 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_find_elements",
-            description: "Find all UI elements matching a query. Returns a list with id, label, type, and frame.",
+            description: "Find UI elements matching a query. The 'text' parameter searches labels/values of the element AND its descendants (e.g. a button containing a staticText child). Returns id, label, type, center, and frame. Device chrome is excluded.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "text": .object([
                         "type": .string("string"),
-                        "description": .string("Text to search for in labels/values"),
+                        "description": .string("Text to search for in element and descendant labels/values (e.g. 'More' finds a button containing a staticText child with label 'More')"),
                     ]),
                     "accessibility_id": .object([
                         "type": .string("string"),
@@ -976,7 +976,8 @@ actor SimPilotMCPServer {
         let session = try await requireSession()
         let tree = try await session.getTree()
         let maxDepth = args["max_depth"]?.intValue
-        let json = elementToJSON(tree.root, maxDepth: maxDepth)
+        let filtered = filterDeviceChrome(tree.root)
+        let json = elementToJSON(filtered, maxDepth: maxDepth)
         return CallTool.Result(content: [.text(json)])
     }
 
@@ -984,7 +985,8 @@ actor SimPilotMCPServer {
         let session = try await requireSession()
         let tree = try await session.getTree()
         let query = buildQuery(from: args)
-        let matches = collectMatching(tree.root, query: query)
+        let filtered = filterDeviceChrome(tree.root)
+        let matches = collectMatching(filtered, query: query)
         let summaries = matches.map { el in
             let idStr = el.id.map { "\"\($0)\"" } ?? "null"
             let labelStr = el.label.map { "\"\($0)\"" } ?? "null"
@@ -1263,6 +1265,38 @@ actor SimPilotMCPServer {
         return nil
     }
 
+    /// Simulator device chrome labels that should be excluded from tree/find results.
+    /// These are the physical button overlays rendered by Simulator.app, not app UI.
+    private static let deviceChromeLabels: Set<String> = [
+        "Action", "Volume Up", "Volume Down", "Sleep/Wake",
+    ]
+
+    /// Filter out Simulator device chrome (hardware button overlays, status bar elements
+    /// with negative Y coordinates) to reduce noise in tree output.
+    private func filterDeviceChrome(_ element: Element) -> Element {
+        let filtered = element.children.compactMap { child -> Element? in
+            // Remove device chrome buttons (hardware button overlays)
+            if let label = child.label, Self.deviceChromeLabels.contains(label) {
+                return nil
+            }
+            // Remove elements entirely above the screen (negative Y, status bar chrome)
+            if child.frame.origin.y < 0 && child.frame.maxY < 0 {
+                return nil
+            }
+            return filterDeviceChrome(child)
+        }
+        return Element(
+            id: element.id,
+            label: element.label,
+            value: element.value,
+            elementType: element.elementType,
+            frame: element.frame,
+            traits: element.traits,
+            isEnabled: element.isEnabled,
+            children: filtered
+        )
+    }
+
     private func collectMatching(_ element: Element, query: ElementQuery) -> [Element] {
         var results: [Element] = []
         if matchesQuery(element, query) { results.append(element) }
@@ -1276,11 +1310,27 @@ actor SimPilotMCPServer {
         if let id = query.accessibilityID, element.id != id { return false }
         if let label = query.label,
            element.label?.localizedCaseInsensitiveContains(label) != true { return false }
-        if let text = query.text,
-           element.label?.localizedCaseInsensitiveContains(text) != true
-               && element.value?.localizedCaseInsensitiveContains(text) != true { return false }
+        if let text = query.text {
+            // Check the element's own label/value first
+            let selfMatch = element.label?.localizedCaseInsensitiveContains(text) == true
+                || element.value?.localizedCaseInsensitiveContains(text) == true
+            // Also check descendant text (e.g. a button containing a staticText child with "More")
+            if !selfMatch && !descendantContainsText(element, text) { return false }
+        }
         if let type = query.elementType, element.elementType != type { return false }
         return true
+    }
+
+    /// Check if any descendant element's label or value contains the given text.
+    private func descendantContainsText(_ element: Element, _ text: String) -> Bool {
+        for child in element.children {
+            if child.label?.localizedCaseInsensitiveContains(text) == true
+                || child.value?.localizedCaseInsensitiveContains(text) == true {
+                return true
+            }
+            if descendantContainsText(child, text) { return true }
+        }
+        return false
     }
 }
 

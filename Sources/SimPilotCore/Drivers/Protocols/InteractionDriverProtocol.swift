@@ -18,6 +18,10 @@ public protocol InteractionDriverProtocol: Sendable {
     /// Type text using keyboard input.
     func typeText(_ text: String) async throws
 
+    /// Type text via the pasteboard (copy + Cmd+V paste).
+    /// More reliable than character-by-character keyboard injection.
+    func typeTextViaPasteboard(_ text: String) async throws
+
     /// Press a hardware button (Home, Lock, VolumeUp, VolumeDown).
     func pressButton(_ button: HardwareButton) async throws
 

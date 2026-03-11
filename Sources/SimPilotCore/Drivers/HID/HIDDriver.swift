@@ -103,6 +103,8 @@ public actor HIDDriver: InteractionDriverProtocol {
 
         // Activate Simulator and paste with Cmd+V
         try await activateSimulator()
+        // Small delay to ensure pasteboard content is ready after pbcopy
+        try await Task.sleep(for: .milliseconds(50))
         try postKeyPress(keyCode: 0x09, flags: .maskCommand) // 'v' key
     }
 
@@ -130,8 +132,9 @@ public actor HIDDriver: InteractionDriverProtocol {
             throw SimPilotError.simulatorNotFound("Simulator.app is not running")
         }
         simApp.activate()
-        // Brief wait for activation to take effect
-        try await Task.sleep(for: .milliseconds(50))
+        // Wait for the Simulator to fully gain keyboard focus.
+        // 50ms is insufficient — the Command modifier can be lost on paste.
+        try await Task.sleep(for: .milliseconds(200))
     }
 
     // MARK: - Coordinate Conversion
