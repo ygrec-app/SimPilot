@@ -152,8 +152,7 @@ public actor HIDDriver: InteractionDriverProtocol {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             process.terminationHandler = { proc in
                 if proc.terminationStatus != 0 {
                     continuation.resume(
