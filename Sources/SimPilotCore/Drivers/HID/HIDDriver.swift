@@ -101,11 +101,10 @@ public actor HIDDriver: InteractionDriverProtocol {
             }
         }
 
-        // Activate Simulator and paste with Cmd+V
-        try await activateSimulator()
-        // Small delay to ensure pasteboard content is ready after pbcopy
-        try await Task.sleep(for: .milliseconds(50))
-        try postKeyPress(keyCode: 0x09, flags: .maskCommand) // 'v' key
+        // Paste via System Events (AppleScript). CGEvent with .maskCommand is
+        // unreliable — the Simulator often drops the modifier and types bare "v".
+        // System Events properly synthesizes Cmd+V through the accessibility system.
+        try await pasteViaSystemEvents()
     }
 
     public func pressButton(_ button: HardwareButton) async throws {
@@ -135,6 +134,43 @@ public actor HIDDriver: InteractionDriverProtocol {
         // Wait for the Simulator to fully gain keyboard focus.
         // 50ms is insufficient — the Command modifier can be lost on paste.
         try await Task.sleep(for: .milliseconds(200))
+    }
+
+    /// Activate Simulator and paste using System Events (AppleScript).
+    /// This is more reliable than CGEvent for modifier keys because System Events
+    /// properly synthesizes the full Cmd+V keystroke through the accessibility system.
+    private func pasteViaSystemEvents() async throws {
+        let script = """
+            tell application "Simulator" to activate
+            delay 0.3
+            tell application "System Events" \
+                to keystroke "v" using command down
+            """
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+            process.terminationHandler = { proc in
+                if proc.terminationStatus != 0 {
+                    continuation.resume(
+                        throwing: SimPilotError.interactionFailed(
+                            "osascript paste failed "
+                            + "(exit \(proc.terminationStatus))"
+                        ))
+                } else {
+                    continuation.resume()
+                }
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 
     // MARK: - Coordinate Conversion

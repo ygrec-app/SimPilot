@@ -1284,16 +1284,25 @@ actor SimPilotMCPServer {
         "Action", "Volume Up", "Volume Down", "Sleep/Wake",
     ]
 
-    /// Filter out Simulator device chrome (hardware button overlays, status bar elements
-    /// with negative Y coordinates) to reduce noise in tree output.
+    /// Filter out Simulator device chrome (hardware button overlays, toolbar,
+    /// status bar elements) to reduce noise in tree output.
     private func filterDeviceChrome(_ element: Element) -> Element {
         let filtered = element.children.compactMap { child -> Element? in
             // Remove device chrome buttons (hardware button overlays)
-            if let label = child.label, Self.deviceChromeLabels.contains(label) {
+            if let label = child.label,
+               Self.deviceChromeLabels.contains(label) {
                 return nil
             }
-            // Remove elements entirely above the screen (negative Y, status bar chrome)
-            if child.frame.origin.y < 0 && child.frame.maxY < 0 {
+            // Remove elements starting above the screen (toolbar,
+            // close/minimize/zoom buttons, title bar text).
+            // These have origin.y < 0 even if they extend into
+            // visible area (e.g. toolbar at y=-28, height=52).
+            if child.frame.origin.y < 0 {
+                return nil
+            }
+            // Remove Simulator window frame label
+            if let label = child.label,
+               label.contains("–") && label.contains("iOS") {
                 return nil
             }
             return filterDeviceChrome(child)
