@@ -287,7 +287,11 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_get_tree",
-            description: "Get the accessibility element tree as JSON. Device chrome (hardware buttons, status bar) is excluded. Use max_depth to limit size.",
+            description: """
+                Get the accessibility element tree as JSON. \
+                Device chrome (hardware buttons, status bar) is excluded. \
+                Use max_depth to limit size.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -301,13 +305,22 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_find_elements",
-            description: "Find UI elements matching a query. The 'text' parameter searches labels/values of the element AND its descendants (e.g. a button containing a staticText child). Returns id, label, type, center, and frame. Device chrome is excluded.",
+            description: """
+                Find UI elements matching a query. The 'text' parameter searches \
+                labels/values of the element AND its descendants (e.g. a button \
+                containing a staticText child). Returns id, label, type, center, \
+                and frame. Device chrome is excluded.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "text": .object([
                         "type": .string("string"),
-                        "description": .string("Text to search for in element and descendant labels/values (e.g. 'More' finds a button containing a staticText child with label 'More')"),
+                        "description": .string(
+                            "Text to search for in element and descendant "
+                            + "labels/values (e.g. 'More' finds a button "
+                            + "containing a staticText child with that label)"
+                        ),
                     ]),
                     "accessibility_id": .object([
                         "type": .string("string"),
