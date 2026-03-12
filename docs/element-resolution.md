@@ -117,15 +117,17 @@ Presets:
 When element resolution fails (common with SwiftUI views that lack accessibility metadata), you can bypass it entirely using device-point coordinates:
 
 1. Use `simpilot_find_elements` or `simpilot_get_tree` to discover element frames
-2. The response includes `center` coordinates for each element
+2. The response includes `center` coordinates and an `onScreen` flag for each element
 3. Pass those coordinates directly to `simpilot_tap`, `simpilot_type`, `simpilot_long_press`, or `simpilot_swipe`
 
 ```bash
 # MCP: find elements, then tap by coordinates
 simpilot_find_elements(element_type: "button")
-# → [{"label": "Sign Up", "center": {"x": 200, "y": 400}, ...}]
+# → [{"label": "Sign Up", "center": {"x": 200, "y": 400}, "onScreen": true, ...}]
 simpilot_tap(x: 200, y: 400)
 ```
+
+> **Note:** Elements inside scrollable lists may not appear in the accessibility tree until scrolled into view (iOS lazily loads off-screen cells). If `find_elements` returns an element with `"onScreen": false`, scroll the list before tapping it.
 
 Coordinates are in **device points** (the same coordinate space as element frames). They are automatically converted to screen coordinates for interaction.
 

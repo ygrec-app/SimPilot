@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **YAML flow steps** — `long_press`, `press_button`, `location`, `url`, `push`, and `biometric` steps now supported in YAML flows.
 - **Session API** — New `openURL`, `setLocation`, `sendPush`, `pressButton`, and `simulateBiometric` methods on Session.
 - **PermissionDriver in Session** — Session now accepts an optional PermissionDriver for biometric simulation.
+- **`onScreen` flag in `find_elements`** — Response now includes `"onScreen": true/false` so agents can tell whether an element is visible or hidden below a scroll view / tab bar.
+- **Improved MCP tool descriptions** — `simpilot_tap` notes iOS back-button label convention, `simpilot_type` emphasizes coordinate-based typing as most reliable, `simpilot_swipe` recommends from/to coordinates for long scrolls, `simpilot_find_elements` documents lazy cell loading.
 
 ### Fixed
 

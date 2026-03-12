@@ -113,6 +113,8 @@ enum SimPilotTools {
                 Tap a UI element. Use EITHER coordinates (x/y) OR a query (accessibility_id/label/text).
                 Coordinates are in device points (from simpilot_find_elements or simpilot_get_tree frames).
                 When using coordinates, no element lookup is performed — this always works.
+                Note: iOS navigation back buttons use the parent view's title as their label \
+                (e.g. "Items"), not "Back". Use find_elements to discover the actual label.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -151,9 +153,10 @@ enum SimPilotTools {
         Tool(
             name: "simpilot_type",
             description: """
-                Type text. If x/y coordinates or a field query is provided, taps the field first.
-                If neither is provided, types into the currently focused field — use this after
-                tapping a field with simpilot_tap.
+                Type text. Providing x/y coordinates is the most reliable way to target a \
+                specific field — it taps the field and pastes the text in one step. \
+                Alternatively, provide accessibility_id/label to find the field. \
+                If neither is provided, types into the currently focused field.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -185,8 +188,9 @@ enum SimPilotTools {
         Tool(
             name: "simpilot_swipe",
             description: """
-                Swipe gesture. Use EITHER a direction (simple) OR from/to coordinates (precise).
-                Coordinates are in device points.
+                Swipe gesture. Use EITHER a direction (simple, short distance) OR \
+                from/to coordinates (precise, any distance). For scrolling long lists, \
+                prefer from/to coordinates with a large Y delta (e.g. from_y=800 to_y=200).
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -312,7 +316,9 @@ enum SimPilotTools {
                 Find UI elements matching a query. The 'text' parameter searches \
                 labels/values of the element AND its descendants (e.g. a button \
                 containing a staticText child). Returns id, label, type, center, \
-                and frame. Device chrome is excluded.
+                frame, and onScreen flag. Device chrome is excluded. \
+                Note: elements in scrollable lists may not appear until scrolled into view \
+                (iOS lazily loads off-screen cells).
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -1102,6 +1108,7 @@ actor SimPilotMCPServer {
     private func handleFindElements(_ args: [String: Value]) async throws -> CallTool.Result {
         let session = try await requireSession()
         let tree = try await session.getTree()
+        let deviceSize = tree.deviceSize
         let query = buildQuery(from: args)
         let filtered = filterDeviceChrome(tree.root)
         let matches = collectMatching(filtered, query: query)
@@ -1112,11 +1119,14 @@ actor SimPilotMCPServer {
             let f = el.frame
             let cx = f.origin.x + f.size.width / 2
             let cy = f.origin.y + f.size.height / 2
+            let onScreen = cx >= 0 && cy >= 0
+                && cx <= deviceSize.width && cy <= deviceSize.height
             return "{\"id\":\(idStr),\"label\":\(labelStr),\"value\":\(valueStr),"
                 + "\"type\":\"\(el.elementType.rawValue)\","
                 + "\"center\":{\"x\":\(cx),\"y\":\(cy)},"
                 + "\"frame\":{\"x\":\(f.origin.x),\"y\":\(f.origin.y),"
-                + "\"width\":\(f.size.width),\"height\":\(f.size.height)}}"
+                + "\"width\":\(f.size.width),\"height\":\(f.size.height)},"
+                + "\"onScreen\":\(onScreen)}"
         }
         return CallTool.Result(content: [.text("[\(summaries.joined(separator: ","))]")])
     }
