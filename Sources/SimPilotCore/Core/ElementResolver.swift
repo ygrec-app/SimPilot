@@ -118,7 +118,8 @@ public actor ElementResolver: ElementResolving {
             return nil
         }
         let screenshotData = try await introspectionDriver.screenshot()
-        let imageSize = CGSize(width: 393, height: 852)
+        let tree = try await introspectionDriver.getElementTree()
+        let imageSize = tree.deviceSize
         guard let point = try await visionDriver.findText(
             text, in: screenshotData, imageSize: imageSize
         ) else {

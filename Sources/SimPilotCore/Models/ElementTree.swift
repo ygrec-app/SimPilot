@@ -8,6 +8,23 @@ public struct ElementTree: Codable, Sendable {
     public init(root: Element) {
         self.root = root
     }
+
+    /// Extract device dimensions from the AX tree structure.
+    /// The Simulator tree has: root > window > content area.
+    /// Falls back to iPhone 15 Pro dimensions (393x852) if not determinable.
+    public var deviceSize: CGSize {
+        for child in root.children {
+            for grandchild in child.children {
+                if grandchild.frame.width > 200 && grandchild.frame.height > 200 {
+                    return grandchild.frame.size
+                }
+            }
+            if child.frame.width > 200 && child.frame.height > 200 {
+                return child.frame.size
+            }
+        }
+        return CGSize(width: 393, height: 852)
+    }
 }
 
 /// A single UI element in the accessibility tree.

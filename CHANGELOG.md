@@ -5,6 +5,17 @@ All notable changes to SimPilot will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-12
+
+### Added
+
+- **System alert auto-dismissal** — SessionManager detects and dismisses common iOS system dialogs (e.g. "Save Password?", "Allow Notifications") via OCR after auth-related taps and on app launch.
+- **Descendant text search** — Element resolution Strategy 3 now checks child element labels/values, finding buttons whose text lives in a nested label node.
+- **OCR fallback for accessibility IDs** — When all AX-based strategies fail, `humanReadableFromID` converts camelCase IDs to natural text and searches via Vision OCR (e.g. `signInButton` → "Sign In").
+- **Focus verification with retry** — `typeText` polls up to 5 times to confirm the target field received focus before typing, replacing a fixed 200ms sleep.
+- **Dynamic device size detection** — `ElementTree.deviceSize` computed property extracts device dimensions from the AX tree, replacing hardcoded 393×852 values in swipe calculations and screenshot sizing.
+- **Description attribute fallback** — AccessibilityDriver now reads `kAXDescriptionAttribute` and uses it as the element label when title is nil, recovering labels for images and custom controls.
+
 ## [1.2.0] - 2026-03-11
 
 ### Fixed

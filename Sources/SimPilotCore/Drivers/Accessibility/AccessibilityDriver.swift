@@ -171,6 +171,7 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
 
         let role = getStringAttribute(axElement, kAXRoleAttribute)
         let title = getStringAttribute(axElement, kAXTitleAttribute)
+        let description = getStringAttribute(axElement, kAXDescriptionAttribute)
         let value = getStringAttribute(axElement, kAXValueAttribute)
         let identifier = getStringAttribute(axElement, kAXIdentifierAttribute)
         let rawFrame = getFrameAttribute(axElement)
@@ -202,7 +203,7 @@ public actor AccessibilityDriver: IntrospectionDriverProtocol {
 
         return Element(
             id: identifier,
-            label: title,
+            label: title ?? description,
             value: value,
             elementType: elementType,
             frame: frame,

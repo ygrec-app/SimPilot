@@ -9,6 +9,7 @@ public actor Session {
     private let simulatorDriver: SimulatorDriverProtocol
     private let interactionDriver: InteractionDriverProtocol
     private let introspectionDriver: IntrospectionDriverProtocol
+    private let visionDriver: VisionDriver?
     private let startTime: Date
     private var actionCount: Int = 0
     private var assertionPassCount: Int = 0
@@ -20,13 +21,15 @@ public actor Session {
         bundleID: String?,
         simulatorDriver: SimulatorDriverProtocol,
         interactionDriver: InteractionDriverProtocol,
-        introspectionDriver: IntrospectionDriverProtocol
+        introspectionDriver: IntrospectionDriverProtocol,
+        visionDriver: VisionDriver? = nil
     ) {
         self.device = device
         self.bundleID = bundleID
         self.simulatorDriver = simulatorDriver
         self.interactionDriver = interactionDriver
         self.introspectionDriver = introspectionDriver
+        self.visionDriver = visionDriver
         self.startTime = Date()
         self.sessionID = UUID().uuidString
     }
@@ -58,7 +61,24 @@ public actor Session {
     public func type(into query: ElementQuery, text: String) async throws {
         let resolved = try await resolveElement(query)
         try await interactionDriver.tap(point: resolved.element.center)
-        try await Task.sleep(for: .milliseconds(200))
+
+        // Verify focus with retry instead of fixed delay
+        var focusVerified = false
+        for _ in 0..<5 {
+            try await Task.sleep(for: .milliseconds(100))
+            if let focused = try? await introspectionDriver.getFocusedElement(),
+               focused.id == resolved.element.id
+                || focused.elementType == .textField
+                || focused.elementType == .secureTextField {
+                focusVerified = true
+                break
+            }
+        }
+        if !focusVerified {
+            // Extra delay as fallback if focus couldn't be verified
+            try await Task.sleep(for: .milliseconds(200))
+        }
+
         try await interactionDriver.typeTextViaPasteboard(text)
         actionCount += 1
     }
@@ -89,8 +109,15 @@ public actor Session {
     // MARK: - Swipe
 
     public func swipe(_ direction: SwipeDirection) async throws {
-        let screenCenter = CGPoint(x: 187, y: 406)
-        let distance: CGFloat = 300
+        // Derive device screen size from AX tree
+        let tree = try await introspectionDriver.getElementTree()
+        let contentFrame = tree.root.children.first?.children.first?.frame
+            ?? CGRect(x: 0, y: 0, width: 393, height: 852)
+        let screenCenter = CGPoint(
+            x: contentFrame.width / 2,
+            y: contentFrame.height / 2
+        )
+        let distance: CGFloat = min(contentFrame.height, contentFrame.width) * 0.35
         let target: CGPoint = switch direction {
         case .up: CGPoint(x: screenCenter.x, y: screenCenter.y - distance)
         case .down: CGPoint(x: screenCenter.x, y: screenCenter.y + distance)
@@ -237,11 +264,12 @@ public actor Session {
             }
         }
 
-        // Strategy 3: By text
+        // Strategy 3: By text (including descendant labels)
         if let text = query.text {
             if let element = findInTree(tree.root, where: {
                 $0.label?.localizedCaseInsensitiveContains(text) == true ||
-                $0.value?.localizedCaseInsensitiveContains(text) == true
+                $0.value?.localizedCaseInsensitiveContains(text) == true ||
+                descendantContainsText($0, text)
             }) {
                 return ResolvedElement(element: element, strategy: .label)
             }
@@ -256,7 +284,87 @@ public actor Session {
             }
         }
 
+        // Strategy 5: OCR fallback — find text visually on screen
+        if let visionDriver {
+            // Determine what text to search for via OCR
+            let searchText = query.text
+                ?? query.label
+                ?? query.accessibilityID.flatMap { humanReadableFromID($0) }
+
+            if let searchText {
+                let screenshotData = try await introspectionDriver.screenshot()
+                let deviceSize = tree.deviceSize
+                if let point = try await visionDriver.findText(searchText, in: screenshotData, imageSize: deviceSize) {
+                    let ocrElement = Element(
+                        id: query.accessibilityID, label: searchText, value: nil, elementType: .other,
+                        frame: CGRect(origin: point, size: CGSize(width: 44, height: 44)),
+                        traits: [], isEnabled: true, children: []
+                    )
+                    return ResolvedElement(element: ocrElement, strategy: .visionOCR)
+                }
+            }
+        }
+
         throw SimPilotError.elementNotFound(query)
+    }
+
+    /// Check if any descendant of the element contains the given text in its label or value.
+    private func descendantContainsText(_ element: Element, _ text: String) -> Bool {
+        for child in element.children {
+            if child.label?.localizedCaseInsensitiveContains(text) == true
+                || child.value?.localizedCaseInsensitiveContains(text) == true {
+                return true
+            }
+            if descendantContainsText(child, text) { return true }
+        }
+        return false
+    }
+
+    /// Convert an accessibility ID like "welcomeLabel" or "signInButton" to human-readable text
+    /// for OCR search. Splits camelCase, removes common suffixes, and capitalizes.
+    /// "welcomeLabel" → "Welcome", "listTab" → "List", "deleteAccountButton" → "Delete Account"
+    private func humanReadableFromID(_ id: String) -> String? {
+        let suffixes = ["Label", "Button", "Field", "View", "Image", "Tab", "Cell", "Toggle", "Switch"]
+        var text = id
+        for suffix in suffixes {
+            if text.hasSuffix(suffix) && text.count > suffix.count {
+                text = String(text.dropLast(suffix.count))
+                break
+            }
+        }
+        // Split camelCase: "deleteAccount" → "delete Account"
+        var result = ""
+        for char in text {
+            if char.isUppercase && !result.isEmpty {
+                result += " "
+            }
+            result += String(char)
+        }
+        let trimmed = result.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        // Capitalize first letter
+        return trimmed.prefix(1).uppercased() + trimmed.dropFirst()
+    }
+
+    /// Detect and dismiss common iOS system alerts (e.g. "Save Password?", "Allow Notifications")
+    /// by using OCR to find dismiss buttons. Returns true if a dialog was dismissed.
+    @discardableResult
+    public func dismissSystemAlertIfPresent() async throws -> Bool {
+        guard let visionDriver else { return false }
+        let screenshotData = try await introspectionDriver.screenshot()
+        let tree = try await introspectionDriver.getElementTree()
+
+        // Dismiss labels specific to iOS system dialogs — intentionally excludes generic
+        // labels like "Cancel" which could dismiss app dialogs the user wants to interact with.
+        let dismissLabels = ["Not Now", "Don't Save", "Don't Allow", "Close", "Dismiss"]
+        for label in dismissLabels {
+            if let point = try await visionDriver.findText(label, in: screenshotData, imageSize: tree.deviceSize) {
+                try await interactionDriver.tap(point: point)
+                try await Task.sleep(for: .milliseconds(500))
+                return true
+            }
+        }
+        return false
     }
 
     /// Recursively search the tree for the first matching element.
@@ -372,12 +480,15 @@ public struct SessionBuilder: Sendable {
 
         _ = pid // PID tracked by the OS; session doesn't need it directly
 
+        let visionDriver = VisionDriver()
+
         return Session(
             device: device,
             bundleID: bundleID,
             simulatorDriver: simDriver,
             interactionDriver: interDriver,
-            introspectionDriver: introDriver
+            introspectionDriver: introDriver,
+            visionDriver: visionDriver
         )
     }
 }

@@ -955,7 +955,19 @@ actor SimPilotMCPServer {
             )
         }
         try await session.tap(query)
-        return CallTool.Result(content: [.text("Tapped element matching: \(query.description)")])
+
+        // Auto-dismiss system alerts only after sign-in/submit type taps
+        // to avoid the 500ms penalty on every tap.
+        var suffix = ""
+        if let id = query.accessibilityID?.lowercased(),
+           id.contains("signin") || id.contains("login") || id.contains("submit")
+            || id.contains("signup") || id.contains("continue") || id.contains("allow") {
+            try await Task.sleep(for: .milliseconds(500))
+            if try await session.dismissSystemAlertIfPresent() {
+                suffix = " (auto-dismissed a system dialog)"
+            }
+        }
+        return CallTool.Result(content: [.text("Tapped element matching: \(query.description)\(suffix)")])
     }
 
     private func handleType(_ args: [String: Value]) async throws -> CallTool.Result {
@@ -1284,15 +1296,22 @@ actor SimPilotMCPServer {
 
         let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
         let hidDriver = DriverFactory.makeHIDDriver(udid: device.udid)
+        let visionDriver = VisionDriver()
 
         let session = Session(
             device: device,
             bundleID: bundleID,
             simulatorDriver: simDriver,
             interactionDriver: hidDriver,
-            introspectionDriver: accessibilityDriver
+            introspectionDriver: accessibilityDriver,
+            visionDriver: visionDriver
         )
         activeSession = session
+
+        // Wait briefly for the app to settle, then auto-dismiss any system alerts
+        // (e.g. "Save Password?", notification permissions, etc.)
+        try await Task.sleep(for: .seconds(1))
+        let dismissed = try await session.dismissSystemAlertIfPresent()
 
         return CallTool.Result(content: [
             .text("""
@@ -1300,6 +1319,7 @@ actor SimPilotMCPServer {
                 Device: \(device.name) (\(device.udid))
                 Runtime: \(device.runtime)
                 \(bundleID.map { "App: \($0)" } ?? "No app launched")
+                \(dismissed ? "(Auto-dismissed a system dialog)" : "")
                 """),
         ])
     }
@@ -1339,13 +1359,15 @@ actor SimPilotMCPServer {
         bootedDevice = booted
         let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
         let hidDriver = DriverFactory.makeHIDDriver(udid: booted.udid)
+        let visionDriver = VisionDriver()
 
         let session = Session(
             device: booted,
             bundleID: nil,
             simulatorDriver: getSimctlDriver(),
             interactionDriver: hidDriver,
-            introspectionDriver: accessibilityDriver
+            introspectionDriver: accessibilityDriver,
+            visionDriver: visionDriver
         )
         activeSession = session
         return session
