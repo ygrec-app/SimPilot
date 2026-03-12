@@ -123,6 +123,10 @@ setup:
 
 # Send push notification
 - push: { title: "New Message", body: "You have mail", bundle_id: com.example.app }
+
+# Simulate biometric authentication (Face ID / Touch ID)
+- biometric: true   # match
+- biometric: false  # no match
 ```
 
 ### Teardown

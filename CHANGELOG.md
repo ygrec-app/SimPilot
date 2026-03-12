@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Focus verification with retry** — `typeText` polls up to 5 times to confirm the target field received focus before typing, replacing a fixed 200ms sleep.
 - **Dynamic device size detection** — `ElementTree.deviceSize` computed property extracts device dimensions from the AX tree, replacing hardcoded 393×852 values in swipe calculations and screenshot sizing.
 - **Description attribute fallback** — AccessibilityDriver now reads `kAXDescriptionAttribute` and uses it as the element label when title is nil, recovering labels for images and custom controls.
+- **YAML flow steps** — `long_press`, `press_button`, `location`, `url`, `push`, and `biometric` steps now supported in YAML flows.
+- **Session API** — New `openURL`, `setLocation`, `sendPush`, `pressButton`, and `simulateBiometric` methods on Session.
+- **PermissionDriver in Session** — Session now accepts an optional PermissionDriver for biometric simulation.
+
+### Fixed
+
+- **`assertNotVisible` false pass** — Previously caught all `SimPilotError` variants; now only catches `.elementNotFound`. Timeout or accessibility errors propagate correctly.
+- **Reporter pass/fail counts always 0** — HTMLReporter and JUnitReporter prefix matching fixed to match actual assertion format (`" — PASSED: "` / `" — FAILED: "`).
+- **MCP `assertNotVisible` empty string** — Returns an error when no text/label/accessibility_id is provided instead of silently asserting empty string.
+- **FlowRunner typing into empty query** — Types into the currently focused field when no target is specified.
+- **PID 0 sentinel** — `AppSession.pid` changed from `Int` (with 0 as sentinel) to `Int?` across the protocol chain.
+- **`AccessibilityCheck` hang** — `waitUntilExit()` now only called if `process.run()` succeeds.
+- **Homebrew formula path** — Fixed binary path from `.build/apple/Products/Release/` to `.build/release/`.
+- **Missing `AppPermission` handling** — `locationAlways`, `faceID`, `healthKit`, `homeKit` now handled in `PermissionDriver.grantAllPermissions`.
+
+### Removed
+
+- **`PluginLoader.swift`** — Dead code (types only referenced within the file).
+- **`SessionConfig`** — Unused struct removed from `SessionTypes.swift`.
+- **`CLISimctlDriver` duplication** — Refactored from ~170 lines of copied code to a thin wrapper delegating to `SimctlDriver`.
 
 ## [1.2.0] - 2026-03-11
 

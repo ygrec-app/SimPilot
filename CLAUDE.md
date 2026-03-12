@@ -7,7 +7,7 @@ Swift 6.0+, SPM, macOS 14+.
 ## Architecture
 - **Driver Layer** (`Sources/SimPilotCore/Drivers/`) — Protocol-based wrappers around external tools (includes `VisionDriver` for OCR-based element finding via Apple Vision framework)
 - **Core Engine** (`Sources/SimPilotCore/Core/`) — High-level operations composing drivers
-- **Consumer Layer** (`Sources/SimPilotCLI/`, `Sources/SimPilotMCP/`) — MCP Server + CLI
+- **Consumer Layer** (`Sources/SimPilotCLI/`) — MCP Server + CLI
 - **Reporting** (`Sources/SimPilotCore/Reporting/`) — Trace recording, HTML/JUnit reports
 - **Plugins** (`Sources/SimPilotCore/Plugins/`) — Extensibility system
 
@@ -26,7 +26,7 @@ All in `Sources/SimPilotCore/Models/`:
 - `ActionResult`, `SimPilotError`
 - `HardwareButton`, `KeyboardKey`, `AppPermission`, `StatusBarOverrides`, `SwipeDirection`
 - `RecognizedText`
-- `AppSession`, `ResolverConfig`, `ActionConfig`, `SessionConfig`
+- `AppSession`, `ResolverConfig`, `ActionConfig`
 - `AssertionResult`, `AssertionFailure`, `SessionReport`, `SessionInfo`, `DiffResult`
 
 ## Conventions
