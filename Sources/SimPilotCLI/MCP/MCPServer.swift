@@ -964,14 +964,19 @@ actor SimPilotMCPServer {
         try await session.tap(query)
 
         // Auto-dismiss system alerts only after sign-in/submit type taps
-        // to avoid the 500ms penalty on every tap.
+        // to avoid the 500ms penalty on every tap. Best-effort — don't
+        // let a Vision/AX failure break the tap response.
         var suffix = ""
         if let id = query.accessibilityID?.lowercased(),
            id.contains("signin") || id.contains("login") || id.contains("submit")
             || id.contains("signup") || id.contains("continue") || id.contains("allow") {
-            try await Task.sleep(for: .milliseconds(500))
-            if try await session.dismissSystemAlertIfPresent() {
-                suffix = " (auto-dismissed a system dialog)"
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+                if try await session.dismissSystemAlertIfPresent() {
+                    suffix = " (auto-dismissed a system dialog)"
+                }
+            } catch {
+                // Best-effort — ignore dismiss failures
             }
         }
         return CallTool.Result(content: [.text("Tapped element matching: \(query.description)\(suffix)")])
@@ -1319,10 +1324,15 @@ actor SimPilotMCPServer {
         )
         activeSession = session
 
-        // Wait briefly for the app to settle, then auto-dismiss any system alerts
-        // (e.g. "Save Password?", notification permissions, etc.)
-        try await Task.sleep(for: .seconds(1))
-        let dismissed = try await session.dismissSystemAlertIfPresent()
+        // Wait briefly for the app to settle, then try to auto-dismiss system alerts.
+        // This is best-effort — don't let a failure here kill session start.
+        var dismissed = false
+        do {
+            try await Task.sleep(for: .seconds(1))
+            dismissed = try await session.dismissSystemAlertIfPresent()
+        } catch {
+            // Accessibility/Vision may not be ready yet — safe to ignore
+        }
 
         return CallTool.Result(content: [
             .text("""

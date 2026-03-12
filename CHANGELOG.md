@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`AccessibilityCheck` hang** — `waitUntilExit()` now only called if `process.run()` succeeds.
 - **Homebrew formula path** — Fixed binary path from `.build/apple/Products/Release/` to `.build/release/`.
 - **Missing `AppPermission` handling** — `locationAlways`, `faceID`, `healthKit`, `homeKit` now handled in `PermissionDriver.grantAllPermissions`.
+- **MCP server crash on session start** — `dismissSystemAlertIfPresent()` could throw during `handleSessionStart` and after auth-related taps if the accessibility tree or Vision OCR wasn't ready yet, killing the stdio MCP process. Now wrapped in try/catch as best-effort.
 
 ### Removed
 
