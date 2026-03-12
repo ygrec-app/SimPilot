@@ -38,8 +38,9 @@ func checkAccessibilityPermission() {
     let process = Process()
     process.executableURL = URL(filePath: "/usr/bin/open")
     process.arguments = [url.absoluteString]
-    try? process.run()
-    process.waitUntilExit()
+    if (try? process.run()) != nil {
+        process.waitUntilExit()
+    }
 
     exit(1)
 }

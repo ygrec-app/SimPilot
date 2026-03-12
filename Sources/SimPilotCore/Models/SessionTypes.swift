@@ -4,9 +4,9 @@ import Foundation
 public struct AppSession: Sendable {
     public let device: DeviceInfo
     public let bundleID: String
-    public let pid: Int
+    public let pid: Int?
 
-    public init(device: DeviceInfo, bundleID: String, pid: Int) {
+    public init(device: DeviceInfo, bundleID: String, pid: Int?) {
         self.device = device
         self.bundleID = bundleID
         self.pid = pid
@@ -58,35 +58,6 @@ public struct ActionConfig: Sendable {
 
     public static let `default` = ActionConfig()
     public static let debug = ActionConfig(screenshotAfterAction: true)
-}
-
-/// Configuration for a full SimPilot session.
-public struct SessionConfig: Sendable {
-    public var screenshotOnEveryAction: Bool
-    public var traceEnabled: Bool
-    public var traceOutputDir: String
-    public var resolverConfig: ResolverConfig
-    public var actionConfig: ActionConfig
-
-    public init(
-        screenshotOnEveryAction: Bool = false,
-        traceEnabled: Bool = true,
-        traceOutputDir: String = "./simpilot-traces",
-        resolverConfig: ResolverConfig = .default,
-        actionConfig: ActionConfig = .default
-    ) {
-        self.screenshotOnEveryAction = screenshotOnEveryAction
-        self.traceEnabled = traceEnabled
-        self.traceOutputDir = traceOutputDir
-        self.resolverConfig = resolverConfig
-        self.actionConfig = actionConfig
-    }
-
-    public static let `default` = SessionConfig()
-    public static let debug = SessionConfig(
-        screenshotOnEveryAction: true,
-        traceEnabled: true
-    )
 }
 
 /// The result of an assertion check.

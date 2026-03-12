@@ -8,8 +8,16 @@ struct JUnitReporterTests {
     @Test("Generates valid XML structure")
     func generatesValidXML() {
         let events: [TraceEvent] = [
-            TraceEvent(step: 1, type: .assertion, details: "PASS: element visible", duration: .milliseconds(500)),
-            TraceEvent(step: 2, type: .assertion, details: "PASS: text matches", duration: .milliseconds(200)),
+            TraceEvent(
+                step: 1, type: .assertion,
+                details: "assertVisible(text: \"A\") — PASSED: element visible",
+                duration: .milliseconds(500)
+            ),
+            TraceEvent(
+                step: 2, type: .assertion,
+                details: "assertValue(text: \"B\") — PASSED: text matches",
+                duration: .milliseconds(200)
+            ),
         ]
 
         let xml = JUnitReporter.generate(events: events, suiteName: "auth-flow")
@@ -25,8 +33,16 @@ struct JUnitReporterTests {
     @Test("Failed assertions include failure element")
     func failedAssertions() {
         let events: [TraceEvent] = [
-            TraceEvent(step: 1, type: .assertion, details: "PASS: visible", duration: .milliseconds(100)),
-            TraceEvent(step: 2, type: .assertion, details: "FAIL: element not found", duration: .milliseconds(5000)),
+            TraceEvent(
+                step: 1, type: .assertion,
+                details: "assertVisible(text: \"A\") — PASSED: visible",
+                duration: .milliseconds(100)
+            ),
+            TraceEvent(
+                step: 2, type: .assertion,
+                details: "assertVisible(text: \"B\") — FAILED: element not found",
+                duration: .milliseconds(5000)
+            ),
         ]
 
         let xml = JUnitReporter.generate(events: events, suiteName: "test")
@@ -41,7 +57,7 @@ struct JUnitReporterTests {
     func nonAssertionEventsExcluded() {
         let events: [TraceEvent] = [
             TraceEvent(step: 1, type: .tap, details: "Tapped button"),
-            TraceEvent(step: 2, type: .assertion, details: "PASS: visible"),
+            TraceEvent(step: 2, type: .assertion, details: "assertVisible(text: \"X\") — PASSED: visible"),
             TraceEvent(step: 3, type: .swipe, details: "Swiped left"),
         ]
 
@@ -55,7 +71,7 @@ struct JUnitReporterTests {
     @Test("Escapes XML special characters")
     func escapesXML() {
         let events: [TraceEvent] = [
-            TraceEvent(step: 1, type: .assertion, details: "PASS: text == \"Hello & <World>\""),
+            TraceEvent(step: 1, type: .assertion, details: "assertValue(text: \"test\") — PASSED: text == \"Hello & <World>\""),
         ]
 
         let xml = JUnitReporter.generate(events: events, suiteName: "escape-test")
@@ -79,7 +95,7 @@ struct JUnitReporterTests {
             TraceEvent(
                 step: 1,
                 type: .assertion,
-                details: "PASS: visible",
+                details: "assertVisible(text: \"Y\") — PASSED: visible",
                 duration: .milliseconds(100),
                 screenshotPath: "/tmp/001_screenshot.png"
             ),

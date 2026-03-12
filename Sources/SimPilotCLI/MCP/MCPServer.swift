@@ -919,7 +919,7 @@ actor SimPilotMCPServer {
         ensureSimulatorAppOpen(udid: session.device.udid)
         bootedDevice = session.device
         return CallTool.Result(content: [
-            .text("App launched: \(bundleID!) on \(session.device.name) (PID: \(session.pid))\(detectedInfo)"),
+            .text("App launched: \(bundleID!) on \(session.device.name)\(session.pid.map { " (PID: \($0))" } ?? "")\(detectedInfo)"),
         ])
     }
 
@@ -1133,7 +1133,9 @@ actor SimPilotMCPServer {
 
     private func handleAssertNotVisible(_ args: [String: Value]) async throws -> CallTool.Result {
         let session = try await requireSession()
-        let text = args["text"]?.stringValue ?? args["label"]?.stringValue ?? args["accessibility_id"]?.stringValue ?? ""
+        guard let text = args["text"]?.stringValue ?? args["label"]?.stringValue ?? args["accessibility_id"]?.stringValue else {
+            return CallTool.Result(content: [.text("Missing required parameter: text, label, or accessibility_id")], isError: true)
+        }
         try await session.assertNotVisible(text: text)
         return CallTool.Result(content: [.text("{\"passed\":true,\"details\":\"Confirmed not visible\"}")])
     }
@@ -1304,6 +1306,7 @@ actor SimPilotMCPServer {
         let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
         let hidDriver = DriverFactory.makeHIDDriver(udid: device.udid)
         let visionDriver = VisionDriver()
+        let permissionDriver = DriverFactory.makePermissionDriver()
 
         let session = Session(
             device: device,
@@ -1311,7 +1314,8 @@ actor SimPilotMCPServer {
             simulatorDriver: simDriver,
             interactionDriver: hidDriver,
             introspectionDriver: accessibilityDriver,
-            visionDriver: visionDriver
+            visionDriver: visionDriver,
+            permissionDriver: permissionDriver
         )
         activeSession = session
 
@@ -1367,6 +1371,7 @@ actor SimPilotMCPServer {
         let accessibilityDriver = DriverFactory.makeAccessibilityDriver()
         let hidDriver = DriverFactory.makeHIDDriver(udid: booted.udid)
         let visionDriver = VisionDriver()
+        let permissionDriver = DriverFactory.makePermissionDriver()
 
         let session = Session(
             device: booted,
@@ -1374,7 +1379,8 @@ actor SimPilotMCPServer {
             simulatorDriver: getSimctlDriver(),
             interactionDriver: hidDriver,
             introspectionDriver: accessibilityDriver,
-            visionDriver: visionDriver
+            visionDriver: visionDriver,
+            permissionDriver: permissionDriver
         )
         activeSession = session
         return session

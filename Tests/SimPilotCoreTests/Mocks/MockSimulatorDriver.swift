@@ -65,7 +65,7 @@ public actor MockSimulatorDriver: SimulatorDriverProtocol {
     // MARK: - Stubbed Responses
 
     public var stubbedDevices: [DeviceInfo] = []
-    public var stubbedLaunchPID: Int = 12345
+    public var stubbedLaunchPID: Int? = 12345
     public var stubbedError: SimPilotError?
 
     public init() {}
@@ -105,7 +105,7 @@ public actor MockSimulatorDriver: SimulatorDriverProtocol {
         if let error = stubbedError { throw error }
     }
 
-    public func launch(udid: String, bundleID: String, args: [String]) async throws -> Int {
+    public func launch(udid: String, bundleID: String, args: [String]) async throws -> Int? {
         launchCalls.append(LaunchCall(udid: udid, bundleID: bundleID, args: args))
         if let error = stubbedError { throw error }
         return stubbedLaunchPID

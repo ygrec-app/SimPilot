@@ -3,6 +3,8 @@ import Foundation
 /// Actor wrapping `xcrun simctl` subprocess calls for simulator management.
 public actor SimctlDriver: SimulatorDriverProtocol {
 
+    public init() {}
+
     // MARK: - Private Helpers
 
     /// Execute a simctl command and return stdout data.
@@ -129,7 +131,7 @@ public actor SimctlDriver: SimulatorDriverProtocol {
         try await executeDiscarding(["install", udid, appPath])
     }
 
-    public func launch(udid: String, bundleID: String, args: [String]) async throws -> Int {
+    public func launch(udid: String, bundleID: String, args: [String]) async throws -> Int? {
         // Use a temp file for stdout to avoid pipe deadlocks with actor isolation
         let tmpFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("simpilot-launch-\(UUID().uuidString).txt")
@@ -161,7 +163,7 @@ public actor SimctlDriver: SimulatorDriverProtocol {
                 let output = (try? String(contentsOf: tmpFile, encoding: .utf8)) ?? ""
                 let pidString = output.split(separator: ":").last?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                continuation.resume(returning: pidString.flatMap(Int.init) ?? 0)
+                continuation.resume(returning: pidString.flatMap(Int.init))
             }
 
             do {

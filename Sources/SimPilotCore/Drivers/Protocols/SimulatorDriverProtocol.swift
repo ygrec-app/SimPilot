@@ -14,8 +14,8 @@ public protocol SimulatorDriverProtocol: Sendable {
     /// Install an app bundle on a booted simulator.
     func install(udid: String, appPath: String) async throws
 
-    /// Launch an app by bundle ID. Returns the PID.
-    func launch(udid: String, bundleID: String, args: [String]) async throws -> Int
+    /// Launch an app by bundle ID. Returns the PID if available.
+    func launch(udid: String, bundleID: String, args: [String]) async throws -> Int?
 
     /// Terminate a running app.
     func terminate(udid: String, bundleID: String) async throws

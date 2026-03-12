@@ -98,6 +98,24 @@ struct FlowParser {
         if let config = dict["assert_not_visible"] {
             return .assertNotVisible(try parseQueryConfig(config))
         }
+        if let config = dict["long_press"] {
+            return .longPress(try parseLongPressConfig(config))
+        }
+        if let button = dict["press_button"] as? String {
+            return .pressButton(button)
+        }
+        if let config = dict["location"] {
+            return .location(try parseLocationConfig(config))
+        }
+        if let url = dict["url"] as? String {
+            return .openURL(url)
+        }
+        if let config = dict["push"] {
+            return .push(try parsePushConfig(config))
+        }
+        if let match = dict["biometric"] as? Bool {
+            return .biometric(match)
+        }
         if let config = dict["permission"] {
             return .setPermission(try parsePermissionConfig(config))
         }
@@ -177,6 +195,52 @@ struct FlowParser {
             return FlowQueryConfig(accessibilityID: nil, label: nil, text: text, timeout: nil)
         }
         throw ParseError.invalidStep("assertion config requires a mapping or string")
+    }
+
+    private static func parseLongPressConfig(_ value: Any) throws -> FlowLongPressConfig {
+        if let dict = value as? [String: Any] {
+            return FlowLongPressConfig(
+                accessibilityID: dict["accessibility_id"] as? String,
+                label: dict["label"] as? String,
+                text: dict["text"] as? String,
+                x: dict["x"] as? Double,
+                y: dict["y"] as? Double,
+                duration: dict["duration"] as? TimeInterval
+            )
+        }
+        if let text = value as? String {
+            return FlowLongPressConfig(
+                accessibilityID: nil, label: nil, text: text,
+                x: nil, y: nil, duration: nil
+            )
+        }
+        throw ParseError.invalidStep(
+            "long_press requires a mapping or string value"
+        )
+    }
+
+    private static func parseLocationConfig(_ value: Any) throws -> FlowLocationConfig {
+        guard let dict = value as? [String: Any],
+              let lat = dict["latitude"] as? Double,
+              let lon = dict["longitude"] as? Double else {
+            throw ParseError.invalidStep(
+                "location requires latitude and longitude"
+            )
+        }
+        return FlowLocationConfig(latitude: lat, longitude: lon)
+    }
+
+    private static func parsePushConfig(_ value: Any) throws -> FlowPushConfig {
+        guard let dict = value as? [String: Any],
+              let bundleID = dict["bundle_id"] as? String else {
+            throw ParseError.missingField("push.bundle_id")
+        }
+        return FlowPushConfig(
+            bundleID: bundleID,
+            title: dict["title"] as? String,
+            body: dict["body"] as? String,
+            payload: dict["payload"] as? String
+        )
     }
 
     private static func parsePermissionConfig(_ value: Any) throws -> FlowPermissionConfig {

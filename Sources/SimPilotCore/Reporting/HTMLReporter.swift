@@ -10,8 +10,8 @@ public struct HTMLReporter: Sendable {
         sessionInfo: SessionInfo
     ) -> String {
         let assertions = events.filter { $0.type == .assertion }
-        let passed = assertions.filter { $0.details.hasPrefix("PASS") }.count
-        let failed = assertions.filter { $0.details.hasPrefix("FAIL") }.count
+        let passed = assertions.filter { $0.details.contains(" — PASSED: ") || $0.details.hasPrefix("PASS") }.count
+        let failed = assertions.filter { $0.details.contains(" — FAILED: ") || $0.details.hasPrefix("FAIL") }.count
         let actions = events.filter { isActionType($0.type) }.count
 
         let duration = sessionInfo.endTime.timeIntervalSince(sessionInfo.startTime)

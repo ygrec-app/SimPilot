@@ -8,6 +8,8 @@ struct FlowRunner {
         case stepFailed(step: Int, description: String, cause: any Error)
         case invalidDirection(String)
         case invalidPermission(String)
+        case invalidButton(String)
+        case invalidURL(String)
 
         var description: String {
             switch self {
@@ -17,6 +19,10 @@ struct FlowRunner {
                 "Invalid swipe direction: \(d)"
             case .invalidPermission(let p):
                 "Invalid permission: \(p)"
+            case .invalidButton(let b):
+                "Invalid hardware button: \(b)"
+            case .invalidURL(let u):
+                "Invalid URL: \(u)"
             }
         }
     }
@@ -116,6 +122,19 @@ struct FlowRunner {
             return try await executeAssertVisible(config)
         case .assertNotVisible(let config):
             return try await executeAssertNotVisible(config)
+        case .longPress(let config):
+            return try await executeLongPress(config)
+        case .pressButton(let button):
+            return try await executePressButton(button)
+        case .location(let config):
+            return try await executeLocation(config)
+        case .openURL(let url):
+            return try await executeOpenURL(url)
+        case .push(let config):
+            return try await executePush(config)
+        case .biometric(let match):
+            try await session.simulateBiometric(match: match)
+            return []
         case .setPermission(let config):
             return try executeSetPermission(config)
         case .terminateApp:
@@ -134,16 +153,13 @@ struct FlowRunner {
     }
 
     private func executeType(_ config: FlowTypeConfig) async throws -> [String] {
-        let query: ElementQuery
         if let field = config.field {
-            query = .byID(field)
+            try await session.type(into: .byID(field), text: config.text)
         } else if let id = config.accessibilityID {
-            query = .byID(id)
+            try await session.type(into: .byID(id), text: config.text)
         } else {
-            try await session.type(into: .byText(""), text: config.text)
-            return []
+            try await session.typeText(config.text)
         }
-        try await session.type(into: query, text: config.text)
         return []
     }
 
@@ -188,6 +204,71 @@ struct FlowRunner {
         if let text = config.text {
             try await session.assertNotVisible(text: text)
         }
+        return []
+    }
+
+    private func executeLongPress(_ config: FlowLongPressConfig) async throws -> [String] {
+        if let x = config.x, let y = config.y {
+            try await session.longPress(
+                x: x, y: y, duration: config.duration ?? 1.0
+            )
+        } else {
+            let query = buildQuery(
+                accessibilityID: config.accessibilityID,
+                label: config.label, text: config.text, timeout: nil
+            )
+            try await session.longPress(query, duration: config.duration ?? 1.0)
+        }
+        return []
+    }
+
+    private func executePressButton(_ button: String) async throws -> [String] {
+        guard let hw = HardwareButton(rawValue: button) else {
+            throw RunError.invalidButton(button)
+        }
+        try await session.pressButton(hw)
+        return []
+    }
+
+    private func executeLocation(_ config: FlowLocationConfig) async throws -> [String] {
+        try await session.setLocation(
+            latitude: config.latitude, longitude: config.longitude
+        )
+        return []
+    }
+
+    private func executeOpenURL(_ urlString: String) async throws -> [String] {
+        guard let url = URL(string: urlString) else {
+            throw RunError.invalidURL(urlString)
+        }
+        try await session.openURL(url)
+        return []
+    }
+
+    private func executePush(_ config: FlowPushConfig) async throws -> [String] {
+        let payload: Data
+        if let raw = config.payload {
+            guard let data = raw.data(using: .utf8) else {
+                throw RunError.stepFailed(
+                    step: 0, description: "push",
+                    cause: SimPilotError.invalidConfiguration("Invalid payload")
+                )
+            }
+            payload = data
+        } else {
+            let dict: [String: Any] = [
+                "aps": [
+                    "alert": [
+                        "title": config.title ?? "",
+                        "body": config.body ?? ""
+                    ]
+                ]
+            ]
+            payload = try JSONSerialization.data(withJSONObject: dict)
+        }
+        try await session.sendPush(
+            bundleID: config.bundleID, payload: payload
+        )
         return []
     }
 
@@ -274,6 +355,18 @@ struct FlowRunner {
             "assert_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
         case .assertNotVisible(let c):
             "assert_not_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
+        case .longPress(let c):
+            "long_press(\(c.text ?? c.accessibilityID ?? "coordinates"))"
+        case .pressButton(let b):
+            "press_button(\(b))"
+        case .location(let c):
+            "location(\(c.latitude), \(c.longitude))"
+        case .openURL(let u):
+            "url(\(u))"
+        case .push(let c):
+            "push(\(c.bundleID))"
+        case .biometric(let match):
+            "biometric(\(match ? "match" : "no match"))"
         case .setPermission(let c):
             "permission(\(c.permission) = \(c.granted))"
         case .terminateApp(let id):

@@ -10,7 +10,7 @@ public struct JUnitReporter: Sendable {
         suiteName: String
     ) -> String {
         let assertions = events.filter { $0.type == .assertion }
-        let failures = assertions.filter { $0.details.hasPrefix("FAIL") }
+        let failures = assertions.filter { $0.details.contains(" — FAILED: ") || $0.details.hasPrefix("FAIL") }
 
         let totalDuration = events.reduce(into: 0.0) { total, event in
             if let d = event.duration {
@@ -37,7 +37,7 @@ public struct JUnitReporter: Sendable {
             }
 
             let name = escapeXML(event.details)
-            let isFailed = event.details.hasPrefix("FAIL")
+            let isFailed = event.details.contains(" — FAILED: ") || event.details.hasPrefix("FAIL")
 
             xml += "\n    <testcase name=\"\(name)\" time=\"\(String(format: "%.3f", durationSeconds))\">"
 

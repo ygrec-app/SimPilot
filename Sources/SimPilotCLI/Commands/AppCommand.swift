@@ -73,7 +73,7 @@ struct AppCommand: AsyncParsableCommand {
             try CLIOutput.printResult(
                 json: output.json, quiet: output.quiet,
                 jsonValue: payload,
-                humanMessage: "Launched \(bundleID) (PID: \(session.pid)) on \(session.device.name)"
+                humanMessage: "Launched \(bundleID)\(session.pid.map { " (PID: \($0))" } ?? "") on \(session.device.name)"
             )
         }
     }
@@ -107,6 +107,6 @@ struct AppCommand: AsyncParsableCommand {
 
 private struct LaunchPayload: Encodable {
     let bundleID: String
-    let pid: Int
+    let pid: Int?
     let device: DevicePayload
 }

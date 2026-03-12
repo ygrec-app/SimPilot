@@ -20,7 +20,11 @@ struct HTMLReporterTests {
         let events: [TraceEvent] = [
             TraceEvent(step: 1, type: .sessionStart, details: "Session started"),
             TraceEvent(step: 2, type: .tap, details: "Tapped Sign In", duration: .milliseconds(300)),
-            TraceEvent(step: 3, type: .assertion, details: "PASS: element visible", duration: .milliseconds(100)),
+            TraceEvent(
+                step: 3, type: .assertion,
+                details: "assertVisible(text: \"Sign In\") — PASSED: Found via label",
+                duration: .milliseconds(100)
+            ),
             TraceEvent(step: 4, type: .sessionEnd, details: "Session ended"),
         ]
 
@@ -51,9 +55,9 @@ struct HTMLReporterTests {
     @Test("Counts failed assertions correctly")
     func countsFailedAssertions() {
         let events: [TraceEvent] = [
-            TraceEvent(step: 1, type: .assertion, details: "PASS: visible"),
-            TraceEvent(step: 2, type: .assertion, details: "FAIL: not found"),
-            TraceEvent(step: 3, type: .assertion, details: "PASS: enabled"),
+            TraceEvent(step: 1, type: .assertion, details: "assertVisible(text: \"A\") — PASSED: visible"),
+            TraceEvent(step: 2, type: .assertion, details: "assertVisible(text: \"B\") — FAILED: not found"),
+            TraceEvent(step: 3, type: .assertion, details: "assertEnabled(text: \"C\") — PASSED: enabled"),
         ]
 
         let html = HTMLReporter.generate(events: events, sessionInfo: makeSessionInfo())

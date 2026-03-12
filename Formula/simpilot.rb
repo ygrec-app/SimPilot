@@ -13,7 +13,7 @@ class Simpilot < Formula
            "--disable-sandbox",
            "--arch", "arm64",
            "--arch", "x86_64"
-    bin.install ".build/apple/Products/Release/simpilot"
+    bin.install ".build/release/simpilot"
   end
 
   test do

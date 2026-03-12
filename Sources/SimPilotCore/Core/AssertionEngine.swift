@@ -71,7 +71,8 @@ public actor AssertionEngine {
                 duration: result.duration
             ))
             throw AssertionFailure(result: result)
-        } catch is SimPilotError {
+        } catch let error as SimPilotError {
+            guard case .elementNotFound = error else { throw error }
             let result = AssertionResult(
                 passed: true,
                 assertion: "assertNotVisible(\(query.description))",

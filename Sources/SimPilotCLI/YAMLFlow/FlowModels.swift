@@ -26,6 +26,12 @@ enum FlowStep: Sendable {
     case waitFor(FlowWaitConfig)
     case assertVisible(FlowQueryConfig)
     case assertNotVisible(FlowQueryConfig)
+    case longPress(FlowLongPressConfig)
+    case pressButton(String)
+    case location(FlowLocationConfig)
+    case openURL(String)
+    case push(FlowPushConfig)
+    case biometric(Bool)
     case setPermission(FlowPermissionConfig)
     case terminateApp(String)
 }
@@ -64,6 +70,30 @@ struct FlowQueryConfig: Sendable {
     let label: String?
     let text: String?
     let timeout: TimeInterval?
+}
+
+/// Config for a long press step.
+struct FlowLongPressConfig: Sendable {
+    let accessibilityID: String?
+    let label: String?
+    let text: String?
+    let x: Double?
+    let y: Double?
+    let duration: TimeInterval?
+}
+
+/// Config for a location step.
+struct FlowLocationConfig: Sendable {
+    let latitude: Double
+    let longitude: Double
+}
+
+/// Config for a push notification step.
+struct FlowPushConfig: Sendable {
+    let bundleID: String
+    let title: String?
+    let body: String?
+    let payload: String?
 }
 
 /// Config for a permission step.

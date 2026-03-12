@@ -1,172 +1,56 @@
 import Foundation
 import SimPilotCore
 
-/// CLI-level wrapper that provides SimulatorDriverProtocol via simctl subprocess calls.
-/// Needed because SimctlDriver's init has internal access level.
+/// CLI-level wrapper that delegates all operations to `SimctlDriver`.
 actor CLISimctlDriver: SimulatorDriverProtocol {
 
-    private func execute(_ args: [String]) async throws -> Data {
-        let process = Process()
-        process.executableURL = URL(filePath: "/usr/bin/xcrun")
-        process.arguments = ["simctl"] + args
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        // Read stdout on a background thread to drain the pipe buffer concurrently,
-        // preventing stalls on large output (e.g. screenshot PNG data).
-        let stdoutReader = Task.detached {
-            stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        }
-
-        return try await withCheckedThrowingContinuation { continuation in
-            process.terminationHandler = { _ in
-                Task.detached {
-                    let stdoutData = await stdoutReader.value
-                    if process.terminationStatus != 0 {
-                        let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                        let errorString = String(data: errorData, encoding: .utf8) ?? ""
-                        continuation.resume(throwing: SimPilotError.processError(
-                            command: "simctl \(args.joined(separator: " "))",
-                            exitCode: process.terminationStatus,
-                            stderr: errorString
-                        ))
-                    } else {
-                        continuation.resume(returning: stdoutData)
-                    }
-                }
-            }
-
-            do {
-                try process.run()
-            } catch {
-                stdoutReader.cancel()
-                continuation.resume(throwing: error)
-            }
-        }
-    }
-
-    private func executeDiscarding(_ args: [String]) async throws {
-        _ = try await execute(args)
-    }
-
-    // MARK: - JSON parsing
-
-    private struct SimctlDeviceList: Decodable {
-        let devices: [String: [SimctlDevice]]
-    }
-
-    private struct SimctlDevice: Decodable {
-        let udid: String
-        let name: String
-        let state: String
-        let deviceTypeIdentifier: String
-        let isAvailable: Bool
-    }
-
-    private func parseRuntime(_ runtimeKey: String) -> String {
-        let prefix = "com.apple.CoreSimulator.SimRuntime."
-        guard runtimeKey.hasPrefix(prefix) else { return runtimeKey }
-        return String(runtimeKey.dropFirst(prefix.count))
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: " ", with: ".", range: nil)
-            .replacing(/^(\w+)\./) { match in "\(match.output.1) " }
-    }
-
-    private func parseDeviceType(_ identifier: String) -> String {
-        let prefix = "com.apple.CoreSimulator.SimDeviceType."
-        guard identifier.hasPrefix(prefix) else { return identifier }
-        return String(identifier.dropFirst(prefix.count))
-            .replacingOccurrences(of: "-", with: " ")
-    }
-
-    // MARK: - SimulatorDriverProtocol
+    private let driver = SimctlDriver()
 
     func listDevices() async throws -> [DeviceInfo] {
-        let data = try await execute(["list", "devices", "--json"])
-        let decoded = try JSONDecoder().decode(SimctlDeviceList.self, from: data)
-
-        var devices: [DeviceInfo] = []
-        for (runtimeKey, runtimeDevices) in decoded.devices {
-            let runtime = parseRuntime(runtimeKey)
-            for device in runtimeDevices where device.isAvailable {
-                guard let state = DeviceState(rawValue: device.state) else { continue }
-                devices.append(DeviceInfo(
-                    udid: device.udid,
-                    name: device.name,
-                    runtime: runtime,
-                    state: state,
-                    deviceType: parseDeviceType(device.deviceTypeIdentifier)
-                ))
-            }
-        }
-        return devices
+        try await driver.listDevices()
     }
 
     func boot(udid: String) async throws {
-        try await executeDiscarding(["boot", udid])
+        try await driver.boot(udid: udid)
     }
 
     func shutdown(udid: String) async throws {
-        try await executeDiscarding(["shutdown", udid])
+        try await driver.shutdown(udid: udid)
     }
 
     func install(udid: String, appPath: String) async throws {
-        try await executeDiscarding(["install", udid, appPath])
+        try await driver.install(udid: udid, appPath: appPath)
     }
 
-    func launch(udid: String, bundleID: String, args: [String]) async throws -> Int {
-        let data = try await execute(["launch", udid, bundleID] + args)
-        let output = String(data: data, encoding: .utf8) ?? ""
-        guard let pidString = output.split(separator: ":").last?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let pid = Int(pidString) else {
-            return 0
-        }
-        return pid
+    func launch(udid: String, bundleID: String, args: [String]) async throws -> Int? {
+        try await driver.launch(udid: udid, bundleID: bundleID, args: args)
     }
 
     func terminate(udid: String, bundleID: String) async throws {
-        try await executeDiscarding(["terminate", udid, bundleID])
+        try await driver.terminate(udid: udid, bundleID: bundleID)
     }
 
     func erase(udid: String) async throws {
-        try await executeDiscarding(["erase", udid])
+        try await driver.erase(udid: udid)
     }
 
     func openURL(udid: String, url: URL) async throws {
-        try await executeDiscarding(["openurl", udid, url.absoluteString])
+        try await driver.openURL(udid: udid, url: url)
     }
 
     func setLocation(udid: String, latitude: Double, longitude: Double) async throws {
-        try await executeDiscarding(["location", udid, "set", "\(latitude),\(longitude)"])
+        try await driver.setLocation(udid: udid, latitude: latitude, longitude: longitude)
     }
 
     func sendPush(udid: String, bundleID: String, payload: Data) async throws {
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("json")
-        try payload.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-        try await executeDiscarding(["push", udid, bundleID, tempURL.path])
+        try await driver.sendPush(udid: udid, bundleID: bundleID, payload: payload)
     }
 
     func screenshot(udid: String) async throws -> Data {
-        let data = try await execute(["io", udid, "screenshot", "--type=png", "-"])
-        guard !data.isEmpty else {
-            throw SimPilotError.screenshotFailed("simctl returned empty screenshot data")
-        }
-        return data
+        try await driver.screenshot(udid: udid)
     }
 
     func setStatusBar(udid: String, overrides: StatusBarOverrides) async throws {
-        var args = ["status_bar", udid, "override"]
-        if let time = overrides.time { args += ["--time", time] }
-        if let batteryLevel = overrides.batteryLevel { args += ["--batteryLevel", "\(batteryLevel)"] }
-        if let batteryState = overrides.batteryState { args += ["--batteryState", batteryState] }
-        if let networkType = overrides.networkType { args += ["--dataNetwork", networkType] }
-        if let signalStrength = overrides.signalStrength { args += ["--cellularBars", "\(signalStrength)"] }
-        try await executeDiscarding(args)
+        try await driver.setStatusBar(udid: udid, overrides: overrides)
     }
 }

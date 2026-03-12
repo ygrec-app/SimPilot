@@ -10,6 +10,7 @@ public actor Session {
     private let interactionDriver: InteractionDriverProtocol
     private let introspectionDriver: IntrospectionDriverProtocol
     private let visionDriver: VisionDriver?
+    private let permissionDriver: PermissionDriverProtocol?
     private let startTime: Date
     private var actionCount: Int = 0
     private var assertionPassCount: Int = 0
@@ -22,7 +23,8 @@ public actor Session {
         simulatorDriver: SimulatorDriverProtocol,
         interactionDriver: InteractionDriverProtocol,
         introspectionDriver: IntrospectionDriverProtocol,
-        visionDriver: VisionDriver? = nil
+        visionDriver: VisionDriver? = nil,
+        permissionDriver: PermissionDriverProtocol? = nil
     ) {
         self.device = device
         self.bundleID = bundleID
@@ -30,6 +32,7 @@ public actor Session {
         self.interactionDriver = interactionDriver
         self.introspectionDriver = introspectionDriver
         self.visionDriver = visionDriver
+        self.permissionDriver = permissionDriver
         self.startTime = Date()
         self.sessionID = UUID().uuidString
     }
@@ -164,6 +167,49 @@ public actor Session {
     /// Dismiss the keyboard by pressing Escape.
     public func dismissKeyboard() async throws {
         try await interactionDriver.pressKey(.escape)
+    }
+
+    /// Press a hardware button (home, lock, volume, siri).
+    public func pressButton(_ button: HardwareButton) async throws {
+        try await interactionDriver.pressButton(button)
+        actionCount += 1
+    }
+
+    // MARK: - Simulator Actions
+
+    /// Open a URL in the simulator.
+    public func openURL(_ url: URL) async throws {
+        try await simulatorDriver.openURL(udid: device.udid, url: url)
+        actionCount += 1
+    }
+
+    /// Set the simulated GPS location.
+    public func setLocation(latitude: Double, longitude: Double) async throws {
+        try await simulatorDriver.setLocation(
+            udid: device.udid, latitude: latitude, longitude: longitude
+        )
+        actionCount += 1
+    }
+
+    /// Send a push notification.
+    public func sendPush(bundleID: String, payload: Data) async throws {
+        try await simulatorDriver.sendPush(
+            udid: device.udid, bundleID: bundleID, payload: payload
+        )
+        actionCount += 1
+    }
+
+    /// Simulate biometric authentication (Face ID / Touch ID).
+    public func simulateBiometric(match: Bool) async throws {
+        guard let permissionDriver else {
+            throw SimPilotError.invalidConfiguration(
+                "PermissionDriver not available"
+            )
+        }
+        try await permissionDriver.simulateBiometric(
+            udid: device.udid, match: match
+        )
+        actionCount += 1
     }
 
     // MARK: - Wait
