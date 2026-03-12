@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`AccessibilityCheck` hang** — `waitUntilExit()` now only called if `process.run()` succeeds.
 - **Homebrew formula path** — Fixed binary path from `.build/apple/Products/Release/` to `.build/release/`.
 - **Missing `AppPermission` handling** — `locationAlways`, `faceID`, `healthKit`, `homeKit` now handled in `PermissionDriver.grantAllPermissions`.
-- **MCP server crash on session start** — `dismissSystemAlertIfPresent()` could throw during `handleSessionStart` and after auth-related taps if the accessibility tree or Vision OCR wasn't ready yet, killing the stdio MCP process. Now wrapped in try/catch as best-effort.
+- **MCP server crash on session start** — `dismissSystemAlertIfPresent()` called `AccessibilityDriver.screenshot()` during session start when the Simulator window wasn't fully rendered, causing `SCContentFilter` to hit a C-level assertion (`SIGABRT`) that bypasses Swift error handling and kills the MCP process. Removed auto-dismiss from session start entirely; system alerts are now only dismissed on-demand after auth-related taps.
 
 ### Removed
 

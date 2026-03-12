@@ -1334,15 +1334,12 @@ actor SimPilotMCPServer {
         )
         activeSession = session
 
-        // Wait briefly for the app to settle, then try to auto-dismiss system alerts.
-        // This is best-effort — don't let a failure here kill session start.
-        var dismissed = false
-        do {
-            try await Task.sleep(for: .seconds(1))
-            dismissed = try await session.dismissSystemAlertIfPresent()
-        } catch {
-            // Accessibility/Vision may not be ready yet — safe to ignore
-        }
+        // NOTE: Do NOT call dismissSystemAlertIfPresent() here.
+        // The Simulator window may not be fully rendered yet, and
+        // SCContentFilter crashes with SIGABRT (C assertion) if the
+        // window's display rect is invalid — this bypasses Swift
+        // error handling entirely and kills the MCP server process.
+        // System alerts are dismissed on-demand after auth-related taps.
 
         return CallTool.Result(content: [
             .text("""
@@ -1350,7 +1347,6 @@ actor SimPilotMCPServer {
                 Device: \(device.name) (\(device.udid))
                 Runtime: \(device.runtime)
                 \(bundleID.map { "App: \($0)" } ?? "No app launched")
-                \(dismissed ? "(Auto-dismissed a system dialog)" : "")
                 """),
         ])
     }
