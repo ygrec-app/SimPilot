@@ -77,6 +77,13 @@ struct FlowParser {
             throw ParseError.invalidStep("Step must be a mapping, got: \(value)")
         }
 
+        if let step = try parseInteractionStep(dict) { return step }
+        if let step = try parseSystemStep(dict) { return step }
+
+        throw ParseError.invalidStep("Unknown step type: \(dict.keys.joined(separator: ", "))")
+    }
+
+    private static func parseInteractionStep(_ dict: [String: Any]) throws -> FlowStep? {
         if let config = dict["tap"] {
             return .tap(try parseTapConfig(config))
         }
@@ -86,8 +93,11 @@ struct FlowParser {
         if let config = dict["swipe"] {
             return .swipe(try parseSwipeConfig(config))
         }
-        if let name = dict["screenshot"] as? String {
-            return .screenshot(name)
+        if let config = dict["long_press"] {
+            return .longPress(try parseLongPressConfig(config))
+        }
+        if let button = dict["press_button"] as? String {
+            return .pressButton(button)
         }
         if let config = dict["wait_for"] {
             return .waitFor(try parseWaitConfig(config))
@@ -98,11 +108,12 @@ struct FlowParser {
         if let config = dict["assert_not_visible"] {
             return .assertNotVisible(try parseQueryConfig(config))
         }
-        if let config = dict["long_press"] {
-            return .longPress(try parseLongPressConfig(config))
-        }
-        if let button = dict["press_button"] as? String {
-            return .pressButton(button)
+        return nil
+    }
+
+    private static func parseSystemStep(_ dict: [String: Any]) throws -> FlowStep? {
+        if let name = dict["screenshot"] as? String {
+            return .screenshot(name)
         }
         if let config = dict["location"] {
             return .location(try parseLocationConfig(config))
@@ -122,8 +133,7 @@ struct FlowParser {
         if let bundleID = dict["terminate_app"] as? String {
             return .terminateApp(bundleID)
         }
-
-        throw ParseError.invalidStep("Unknown step type: \(dict.keys.joined(separator: ", "))")
+        return nil
     }
 
     private static func parseTapConfig(_ value: Any) throws -> FlowTapConfig {

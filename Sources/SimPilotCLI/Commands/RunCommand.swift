@@ -171,37 +171,6 @@ struct RunCommand: AsyncParsableCommand {
     }
 
     private func describeStep(_ step: FlowStep) -> String {
-        switch step {
-        case .tap(let c):
-            "tap(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .type(let c):
-            "type(\"\(c.text)\" into \(c.field ?? c.accessibilityID ?? "focused"))"
-        case .swipe(let c):
-            "swipe(\(c.direction)\(c.distance.map { ", distance: \($0)" } ?? ""))"
-        case .screenshot(let name):
-            "screenshot(\(name))"
-        case .waitFor(let c):
-            "wait_for(\(c.text ?? c.accessibilityID ?? "?"), timeout: \(c.timeout)s)"
-        case .assertVisible(let c):
-            "assert_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .assertNotVisible(let c):
-            "assert_not_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .longPress(let c):
-            "long_press(\(c.text ?? c.accessibilityID ?? "coordinates"))"
-        case .pressButton(let b):
-            "press_button(\(b))"
-        case .location(let c):
-            "location(\(c.latitude), \(c.longitude))"
-        case .openURL(let u):
-            "url(\(u))"
-        case .push(let c):
-            "push(\(c.bundleID))"
-        case .biometric(let match):
-            "biometric(\(match ? "match" : "no match"))"
-        case .setPermission(let c):
-            "set_permission(\(c.permission), granted: \(c.granted))"
-        case .terminateApp(let id):
-            "terminate_app(\(id))"
-        }
+        step.stepDescription
     }
 }

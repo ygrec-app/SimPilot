@@ -114,18 +114,25 @@ struct FlowRunner {
             return try await executeType(config)
         case .swipe(let config):
             return try await executeSwipe(config)
-        case .screenshot(let name):
-            return try await executeScreenshot(name)
+        case .longPress(let config):
+            return try await executeLongPress(config)
+        case .pressButton(let button):
+            return try await executePressButton(button)
         case .waitFor(let config):
             return try await executeWait(config)
         case .assertVisible(let config):
             return try await executeAssertVisible(config)
         case .assertNotVisible(let config):
             return try await executeAssertNotVisible(config)
-        case .longPress(let config):
-            return try await executeLongPress(config)
-        case .pressButton(let button):
-            return try await executePressButton(button)
+        default:
+            return try await executeSystemStep(step)
+        }
+    }
+
+    private func executeSystemStep(_ step: FlowStep) async throws -> [String] {
+        switch step {
+        case .screenshot(let name):
+            return try await executeScreenshot(name)
         case .location(let config):
             return try await executeLocation(config)
         case .openURL(let url):
@@ -139,6 +146,8 @@ struct FlowRunner {
             return try executeSetPermission(config)
         case .terminateApp:
             _ = try await session.end()
+            return []
+        default:
             return []
         }
     }
@@ -340,37 +349,6 @@ struct FlowRunner {
     }
 
     private func stepDescription(_ step: FlowStep) -> String {
-        switch step {
-        case .tap(let c):
-            "tap(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .type(let c):
-            "type(\"\(c.text)\" into \(c.field ?? c.accessibilityID ?? "focused"))"
-        case .swipe(let c):
-            "swipe(\(c.direction))"
-        case .screenshot(let name):
-            "screenshot(\(name))"
-        case .waitFor(let c):
-            "wait_for(\(c.text ?? c.accessibilityID ?? "?"), timeout: \(c.timeout)s)"
-        case .assertVisible(let c):
-            "assert_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .assertNotVisible(let c):
-            "assert_not_visible(\(c.text ?? c.accessibilityID ?? c.label ?? "?"))"
-        case .longPress(let c):
-            "long_press(\(c.text ?? c.accessibilityID ?? "coordinates"))"
-        case .pressButton(let b):
-            "press_button(\(b))"
-        case .location(let c):
-            "location(\(c.latitude), \(c.longitude))"
-        case .openURL(let u):
-            "url(\(u))"
-        case .push(let c):
-            "push(\(c.bundleID))"
-        case .biometric(let match):
-            "biometric(\(match ? "match" : "no match"))"
-        case .setPermission(let c):
-            "permission(\(c.permission) = \(c.granted))"
-        case .terminateApp(let id):
-            "terminate_app(\(id))"
-        }
+        step.stepDescription
     }
 }
