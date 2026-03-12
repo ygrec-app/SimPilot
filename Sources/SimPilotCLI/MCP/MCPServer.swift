@@ -50,7 +50,11 @@ enum SimPilotTools {
         ),
         Tool(
             name: "simpilot_launch_app",
-            description: "Launch an app on the booted simulator. Boots the device if needed. If bundle_id is omitted, auto-detects from the most recently built .app in Xcode DerivedData.",
+            description: """
+                Launch an app on the booted simulator. Boots the device if needed. \
+                If bundle_id is omitted, auto-detects from the most recently built \
+                .app in Xcode DerivedData.
+                """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
@@ -894,7 +898,10 @@ actor SimPilotMCPServer {
         // Auto-detect from DerivedData if bundle_id not provided
         if bundleID == nil {
             guard let detected = findRecentSimulatorApp() else {
-                return CallTool.Result(content: [.text("No bundle_id provided and could not auto-detect from DerivedData. Build the project in Xcode first, or provide bundle_id explicitly.")], isError: true)
+                let msg = "No bundle_id provided and could not auto-detect from " +
+                    "DerivedData. Build the project in Xcode first, or provide " +
+                    "bundle_id explicitly."
+                return CallTool.Result(content: [.text(msg)], isError: true)
             }
             bundleID = detected.bundleID
             autoDetected = true

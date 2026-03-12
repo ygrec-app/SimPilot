@@ -243,36 +243,44 @@ public actor Session {
     private func resolveElement(_ query: ElementQuery) async throws -> ResolvedElement {
         let tree = try await introspectionDriver.getElementTree()
 
+        if let result = resolveFromAccessibilityTree(query, tree: tree) {
+            return result
+        }
+
+        if let result = try await resolveViaOCR(query, tree: tree) {
+            return result
+        }
+
+        throw SimPilotError.elementNotFound(query)
+    }
+
+    private func resolveFromAccessibilityTree(
+        _ query: ElementQuery, tree: ElementTree
+    ) -> ResolvedElement? {
         // Strategy 1: By accessibility ID
-        if let id = query.accessibilityID {
-            if let element = findInTree(tree.root, where: { $0.id == id }) {
-                return ResolvedElement(element: element, strategy: .accessibilityID)
-            }
+        if let id = query.accessibilityID,
+           let element = findInTree(tree.root, where: { $0.id == id }) {
+            return ResolvedElement(element: element, strategy: .accessibilityID)
         }
 
         // Strategy 2: By label
-        if let label = query.label {
-            if let element = findInTree(tree.root, where: {
-                $0.label?.localizedCaseInsensitiveContains(label) == true
-            }) {
-                // If elementType is specified, verify it matches
-                if let type = query.elementType, element.elementType != type {
-                    // Continue to other strategies
-                } else {
-                    return ResolvedElement(element: element, strategy: .label)
-                }
+        if let label = query.label,
+           let element = findInTree(tree.root, where: {
+               $0.label?.localizedCaseInsensitiveContains(label) == true
+           }) {
+            if query.elementType == nil || element.elementType == query.elementType {
+                return ResolvedElement(element: element, strategy: .label)
             }
         }
 
         // Strategy 3: By text (including descendant labels)
-        if let text = query.text {
-            if let element = findInTree(tree.root, where: {
-                $0.label?.localizedCaseInsensitiveContains(text) == true ||
-                $0.value?.localizedCaseInsensitiveContains(text) == true ||
-                descendantContainsText($0, text)
-            }) {
-                return ResolvedElement(element: element, strategy: .label)
-            }
+        if let text = query.text,
+           let element = findInTree(tree.root, where: {
+               $0.label?.localizedCaseInsensitiveContains(text) == true ||
+               $0.value?.localizedCaseInsensitiveContains(text) == true ||
+               descendantContainsText($0, text)
+           }) {
+            return ResolvedElement(element: element, strategy: .label)
         }
 
         // Strategy 4: By type + index
@@ -284,28 +292,33 @@ public actor Session {
             }
         }
 
-        // Strategy 5: OCR fallback — find text visually on screen
-        if let visionDriver {
-            // Determine what text to search for via OCR
-            let searchText = query.text
-                ?? query.label
-                ?? query.accessibilityID.flatMap { humanReadableFromID($0) }
+        return nil
+    }
 
-            if let searchText {
-                let screenshotData = try await introspectionDriver.screenshot()
-                let deviceSize = tree.deviceSize
-                if let point = try await visionDriver.findText(searchText, in: screenshotData, imageSize: deviceSize) {
-                    let ocrElement = Element(
-                        id: query.accessibilityID, label: searchText, value: nil, elementType: .other,
-                        frame: CGRect(origin: point, size: CGSize(width: 44, height: 44)),
-                        traits: [], isEnabled: true, children: []
-                    )
-                    return ResolvedElement(element: ocrElement, strategy: .visionOCR)
-                }
-            }
-        }
+    /// Strategy 5: OCR fallback — find text visually on screen
+    private func resolveViaOCR(
+        _ query: ElementQuery, tree: ElementTree
+    ) async throws -> ResolvedElement? {
+        guard let visionDriver else { return nil }
 
-        throw SimPilotError.elementNotFound(query)
+        let searchText = query.text
+            ?? query.label
+            ?? query.accessibilityID.flatMap { humanReadableFromID($0) }
+        guard let searchText else { return nil }
+
+        let screenshotData = try await introspectionDriver.screenshot()
+        let deviceSize = tree.deviceSize
+        guard let point = try await visionDriver.findText(
+            searchText, in: screenshotData, imageSize: deviceSize
+        ) else { return nil }
+
+        let ocrElement = Element(
+            id: query.accessibilityID, label: searchText,
+            value: nil, elementType: .other,
+            frame: CGRect(origin: point, size: CGSize(width: 44, height: 44)),
+            traits: [], isEnabled: true, children: []
+        )
+        return ResolvedElement(element: ocrElement, strategy: .visionOCR)
     }
 
     /// Check if any descendant of the element contains the given text in its label or value.
